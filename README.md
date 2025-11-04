@@ -7,6 +7,62 @@
 
 ---
 
+## 🎨 GUI 可视化界面（推荐！）
+
+**极简界面，一键发布项目到 GitHub**
+
+### 快速开始
+
+1. **安装依赖**
+```bash
+pip install -r requirements.txt
+```
+
+2. **启动 GUI**
+```powershell
+.\run-repoflow-gui.bat
+```
+
+3. **首次配置**
+- 访问 https://github.com/settings/tokens 获取 Token（勾选 repo, workflow, write:packages）
+- 在 GUI 中粘贴并保存
+
+4. **发布项目**
+- 选择项目文件夹
+- 填写仓库信息
+- 点击发布
+
+### 组织密钥配置（一次性）
+
+在 GitHub 组织设置中配置 Secrets（根据项目类型）：
+- `DOCKERHUB_USERNAME` + `DOCKERHUB_TOKEN` - Docker 项目
+- `PYPI_TOKEN` - Python 项目  
+- `NPM_TOKEN` - Node.js 项目
+
+**配置一次，所有仓库通用！**
+
+### 发布后如何更新
+
+**Python (PyPI)**: 更新版本号 → 创建 tag → 自动发布
+```bash
+vim setup.py  # version="1.0.1"
+git commit -am "更新" && git push
+git tag v1.0.1 && git push origin v1.0.1
+```
+
+**Node.js (NPM)**: 使用 npm version → 自动发布
+```bash
+npm version patch
+git push --follow-tags
+```
+
+**Docker**: 直接 push → 自动构建
+```bash
+git commit -am "更新" && git push
+```
+
+---
+
 ## ✨ 核心功能
 
 - ✅ **Git 全自动化** - 自动 commit、push，带重试机制

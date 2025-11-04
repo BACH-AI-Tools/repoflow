@@ -148,12 +148,9 @@ venv
 
 on:
   push:
-    branches: [ main, master ]
     tags:
-      - 'v*'
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
+      - 'v*'  # 只在创建 v* tag 时触发
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
   build-and-publish:
@@ -165,8 +162,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -186,19 +181,7 @@ jobs:
         run: npm run build
         continue-on-error: true
 
-      - name: Bump version and push tag
-        id: tag_version
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: anothrNick/github-tag-action@1.67.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          WITH_V: true
-          DEFAULT_BUMP: patch
-          RELEASE_BRANCHES: main,master
-          INITIAL_VERSION: 1.0.0
-
       - name: Publish to NPM
-        if: startsWith(github.ref, 'refs/tags/v')
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -234,12 +217,9 @@ jobs:
 
 on:
   push:
-    branches: [ main, master ]
     tags:
-      - 'v*'
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
+      - 'v*'  # 只在创建 v* tag 时触发
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
   build-and-publish:
@@ -251,8 +231,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -264,17 +242,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install build twine
 
-      - name: Bump version and push tag
-        id: tag_version
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: anothrNick/github-tag-action@1.67.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          WITH_V: true
-          DEFAULT_BUMP: patch
-          RELEASE_BRANCHES: main,master
-          INITIAL_VERSION: 1.0.0
-
       - name: Build package
         run: python -m build
 
@@ -282,7 +249,6 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        if: startsWith(github.ref, 'refs/tags/v')
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
