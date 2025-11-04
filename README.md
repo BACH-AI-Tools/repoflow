@@ -24,13 +24,15 @@ pip install -r requirements.txt
 ```
 
 3. **首次配置**
-- 访问 https://github.com/settings/tokens 获取 Token（勾选 repo, workflow, write:packages）
-- 在 GUI 中粘贴并保存
+- 点击 GUI 中的 "🔗 获取 Token" 按钮
+- 在打开的页面点击 "Generate token"
+- 复制 token 并粘贴到 GUI
+- 点击保存
 
 4. **发布项目**
 - 选择项目文件夹
 - 填写仓库信息
-- 点击发布
+- 点击发布（没有 README.md 也可以发布，只会提示建议添加）
 
 ### 组织密钥配置（一次性）
 

@@ -109,20 +109,41 @@ class RepoFlowGUI:
         title.grid(row=current_row, column=0, columnspan=3, pady=(0, 20))
         current_row += 1
         
-        # GitHub Token (如果未配置)
+        # GitHub Token 配置区域（简洁版）
+        token_frame = ttk.LabelFrame(main_frame, text="⚙️ GitHub Token", padding="10")
+        token_frame.grid(row=current_row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        current_row += 1
+        
         if not self.github_token.get():
-            ttk.Label(main_frame, text="GitHub Token:", style='Info.TLabel').grid(
-                row=current_row, column=0, sticky=tk.W, pady=5)
-            token_entry = ttk.Entry(main_frame, textvariable=self.github_token, width=40, show='*')
-            token_entry.grid(row=current_row, column=1, sticky=(tk.W, tk.E), pady=5)
-            ttk.Button(main_frame, text="保存", command=self.save_token).grid(
-                row=current_row, column=2, padx=5, pady=5)
-            current_row += 1
+            # 未配置 - 显示配置向导
+            ttk.Label(token_frame, text="需要 GitHub Token 才能发布项目", style='Info.TLabel').pack(anchor=tk.W, pady=(0, 5))
             
-            # 分隔线
-            ttk.Separator(main_frame, orient='horizontal').grid(
-                row=current_row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
-            current_row += 1
+            # Token 输入框和按钮
+            input_frame = ttk.Frame(token_frame)
+            input_frame.pack(fill=tk.X, pady=5)
+            
+            ttk.Entry(input_frame, textvariable=self.github_token, width=50, show='*').pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 5))
+            ttk.Button(input_frame, text="💾 保存", command=self.save_token).pack(side=tk.LEFT)
+            
+            # 快捷按钮
+            button_frame = ttk.Frame(token_frame)
+            button_frame.pack(fill=tk.X, pady=(5, 0))
+            
+            ttk.Button(button_frame, text="🔗 获取新 Token", command=self.open_token_page).pack(side=tk.LEFT, padx=(0, 5))
+            ttk.Label(button_frame, text="← 点击生成新 Token，然后粘贴到上方", style='Info.TLabel').pack(side=tk.LEFT)
+        else:
+            # 已配置 - 显示状态和重新配置按钮
+            status_frame = ttk.Frame(token_frame)
+            status_frame.pack(fill=tk.X, pady=5)
+            
+            ttk.Label(status_frame, text="✅ Token 已配置", style='Success.TLabel').pack(side=tk.LEFT, padx=(0, 10))
+            ttk.Button(status_frame, text="🔄 重新配置", command=self.reconfigure_token).pack(side=tk.LEFT)
+            ttk.Button(status_frame, text="🔗 生成新 Token", command=self.open_token_page).pack(side=tk.LEFT, padx=(5, 0))
+        
+        # 分隔线
+        ttk.Separator(main_frame, orient='horizontal').grid(
+            row=current_row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        current_row += 1
         
         # 1. 选择项目文件夹
         ttk.Label(main_frame, text="📁 项目文件夹:", style='Info.TLabel').grid(
@@ -217,6 +238,70 @@ class RepoFlowGUI:
         ttk.Button(main_frame, text="清空日志", command=self.clear_log).grid(
             row=current_row, column=0, columnspan=3, pady=5)
     
+    def open_token_page(self):
+        """打开 GitHub Token 生成页面"""
+        import webbrowser
+        url = "https://github.com/settings/tokens/new?description=RepoFlow&scopes=repo,workflow,write:packages"
+        webbrowser.open(url)
+        messagebox.showinfo(
+            "获取 Token", 
+            "浏览器已打开 GitHub Token 生成页面\n\n"
+            "1. 权限已自动勾选\n"
+            "2. 点击页面底部的 'Generate token'\n"
+            "3. 复制生成的 token\n"
+            "4. 粘贴到上方输入框\n"
+            "5. 点击保存"
+        )
+    
+    def handle_auth_error(self, error_message):
+        """处理认证错误"""
+        result = messagebox.askquestion(
+            "GitHub Token 错误",
+            f"发布失败，可能是 Token 无效或权限不足：\n\n{error_message}\n\n"
+            "是否要重新配置 Token？\n\n"
+            "点击「是」将清除当前配置并打开 Token 生成页面\n"
+            "点击「否」取消操作",
+            icon='error'
+        )
+        
+        if result == 'yes':
+            # 打开 Token 生成页面
+            self.open_token_page()
+            
+            # 清除旧 Token
+            config_mgr = ConfigManager()
+            config_mgr.save_config({
+                "github_token": "",
+                "default_org": self.org_name.get()
+            })
+            
+            messagebox.showinfo("已清除", "旧 Token 已清除！\n\n请在打开的网页中：\n1. 生成新 Token\n2. 复制 Token\n3. 重启 GUI\n4. 粘贴并保存")
+            self.root.quit()
+    
+    def reconfigure_token(self):
+        """重新配置 Token"""
+        result = messagebox.askquestion(
+            "重新配置",
+            "确定要重新配置 GitHub Token 吗？\n\n"
+            "建议先生成新 Token 再清除旧配置\n\n"
+            "点击「是」将打开 Token 生成页面并清除旧配置",
+            icon='warning'
+        )
+        
+        if result == 'yes':
+            # 打开 Token 生成页面
+            self.open_token_page()
+            
+            # 清除配置
+            config_mgr = ConfigManager()
+            config_mgr.save_config({
+                "github_token": "",
+                "default_org": self.org_name.get()
+            })
+            
+            messagebox.showinfo("已清除", "Token 已清除！\n\n请重启 GUI 重新配置")
+            self.root.quit()
+    
     def save_token(self):
         """保存 GitHub Token"""
         token = self.github_token.get().strip()
@@ -230,8 +315,12 @@ class RepoFlowGUI:
             "default_org": self.org_name.get()
         })
         
-        messagebox.showinfo("成功", "GitHub Token 已保存！")
+        messagebox.showinfo("成功", "Token 已保存！重启 GUI 生效")
         self.log("✅ GitHub Token 已保存\n")
+        
+        # 提示重启
+        if messagebox.askyesno("重启 GUI", "需要重启 GUI 使配置生效，现在重启吗？"):
+            self.root.quit()
     
     def browse_folder(self):
         """浏览并选择文件夹"""
@@ -258,7 +347,7 @@ class RepoFlowGUI:
             if has_readme:
                 info_text += "✅ 发现 README.md\n"
             else:
-                info_text += "⚠️ 未发现 README.md (建议添加)\n"
+                info_text += "💡 建议添加 README.md\n"
             
             if info['detected_types']:
                 type_names = {
@@ -369,14 +458,13 @@ class RepoFlowGUI:
                 pipeline = pipeline_selection
                 self.log(f"  🔧 使用指定 Pipeline: {pipeline}\n")
             
-            # 验证 Pipeline
+            # 验证 Pipeline（只警告，不阻止）
             validation = detector.validate_pipeline(pipeline)
-            if not validation['valid']:
-                self.log(f"  ❌ {validation['message']}\n")
-                self.log("\n❌ 发布失败\n")
-                return
-            elif validation['warning']:
+            if validation.get('warning'):
                 self.log(f"  ⚠️  {validation['warning']}\n")
+            if not validation.get('valid', True):
+                self.log(f"  ⚠️  {validation.get('message', '')}\n")
+                self.log("  💡 继续发布，但 Pipeline 可能无法正常工作\n")
             
             self.log("\n")
             
@@ -422,15 +510,21 @@ class RepoFlowGUI:
             self.log("\n💡 提示: GitHub Actions workflow 将自动构建和发布\n")
             
             # 显示成功消息框
-            self.root.after(0, lambda: messagebox.showinfo(
-                "成功", 
-                f"项目已成功发布到 GitHub!\n\n仓库地址:\nhttps://github.com/{org_name}/{repo_name}"
-            ))
+            success_msg = f"项目已成功发布到 GitHub!\n\n仓库地址:\nhttps://github.com/{org_name}/{repo_name}"
+            self.root.after(0, lambda msg=success_msg: messagebox.showinfo("成功", msg))
             
         except Exception as e:
             error_msg = f"❌ 错误: {str(e)}\n"
             self.log("\n" + error_msg)
-            self.root.after(0, lambda: messagebox.showerror("错误", str(e)))
+            error_message = str(e)
+            
+            # 检查是否是认证错误
+            if any(keyword in str(e).lower() for keyword in ['401', '403', 'authentication', 'unauthorized', 'token', 'credential']):
+                # Token 认证错误，提供快速解决方案
+                self.root.after(0, lambda: self.handle_auth_error(error_message))
+            else:
+                # 其他错误
+                self.root.after(0, lambda msg=error_message: messagebox.showerror("错误", msg))
         
         finally:
             # 重新启用按钮
