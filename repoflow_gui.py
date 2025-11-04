@@ -89,8 +89,9 @@ class RepoFlowGUI:
         
         if config.get('github_token'):
             self.github_token.set(config['github_token'])
-        if config.get('default_org'):
-            self.org_name.set(config['default_org'])
+        # 设置组织名称，优先使用配置文件，否则使用默认值
+        org = config.get('default_org', 'BACH-AI-Tools')
+        self.org_name.set(org)
     
     def create_widgets(self):
         """创建UI组件"""
@@ -169,8 +170,17 @@ class RepoFlowGUI:
         # 3. 组织名称
         ttk.Label(main_frame, text="🏢 组织名称:", style='Info.TLabel').grid(
             row=current_row, column=0, sticky=tk.W, pady=5)
-        ttk.Entry(main_frame, textvariable=self.org_name, width=50).grid(
-            row=current_row, column=1, sticky=(tk.W, tk.E), pady=5)
+        org_entry = ttk.Entry(main_frame, textvariable=self.org_name, width=50)
+        org_entry.grid(row=current_row, column=1, sticky=(tk.W, tk.E), pady=5)
+        current_row += 1
+        
+        # 组织提示
+        org_hint = ttk.Label(
+            main_frame, 
+            text="💡 仓库将创建在此组织下（不是个人账户）",
+            style='Warning.TLabel'
+        )
+        org_hint.grid(row=current_row, column=1, sticky=tk.W, pady=(0, 5))
         current_row += 1
         
         # 4. Pipeline 类型（自动检测）
@@ -243,70 +253,51 @@ class RepoFlowGUI:
         import webbrowser
         url = "https://github.com/settings/tokens/new?description=RepoFlow&scopes=repo,workflow,write:packages"
         webbrowser.open(url)
-        messagebox.showinfo(
-            "获取 Token", 
-            "浏览器已打开 GitHub Token 生成页面\n\n"
-            "1. 权限已自动勾选\n"
-            "2. 点击页面底部的 'Generate token'\n"
-            "3. 复制生成的 token\n"
-            "4. 粘贴到上方输入框\n"
-            "5. 点击保存"
-        )
+        
+        self.log("\n🌐 浏览器已打开 GitHub Token 生成页面\n")
+        self.log("\n📝 操作步骤：\n")
+        self.log("1. 权限已自动勾选\n")
+        self.log("2. 点击页面底部的 'Generate token'\n")
+        self.log("3. 复制生成的 token\n")
+        self.log("4. 粘贴到上方输入框\n")
+        self.log("5. 点击保存\n")
     
     def handle_auth_error(self, error_message):
         """处理认证错误"""
-        result = messagebox.askquestion(
-            "GitHub Token 错误",
-            f"发布失败，可能是 Token 无效或权限不足：\n\n{error_message}\n\n"
-            "是否要重新配置 Token？\n\n"
-            "点击「是」将清除当前配置并打开 Token 生成页面\n"
-            "点击「否」取消操作",
-            icon='error'
-        )
-        
-        if result == 'yes':
-            # 打开 Token 生成页面
-            self.open_token_page()
-            
-            # 清除旧 Token
-            config_mgr = ConfigManager()
-            config_mgr.save_config({
-                "github_token": "",
-                "default_org": self.org_name.get()
-            })
-            
-            messagebox.showinfo("已清除", "旧 Token 已清除！\n\n请在打开的网页中：\n1. 生成新 Token\n2. 复制 Token\n3. 重启 GUI\n4. 粘贴并保存")
-            self.root.quit()
+        self.log("\n" + "=" * 60 + "\n")
+        self.log("⚠️  GitHub Token 错误\n")
+        self.log("=" * 60 + "\n")
+        self.log(f"可能是 Token 无效或权限不足\n\n")
+        self.log("💡 解决方法：\n")
+        self.log("1. 点击上方的 [🔄 重新配置] 按钮\n")
+        self.log("2. 或点击 [🔗 生成新 Token] 按钮\n")
+        self.log("3. 生成新 Token 后重启 GUI\n")
+        self.log("4. 粘贴新 Token 并保存\n")
     
     def reconfigure_token(self):
         """重新配置 Token"""
-        result = messagebox.askquestion(
-            "重新配置",
-            "确定要重新配置 GitHub Token 吗？\n\n"
-            "建议先生成新 Token 再清除旧配置\n\n"
-            "点击「是」将打开 Token 生成页面并清除旧配置",
-            icon='warning'
-        )
+        # 打开 Token 生成页面
+        self.open_token_page()
         
-        if result == 'yes':
-            # 打开 Token 生成页面
-            self.open_token_page()
-            
-            # 清除配置
-            config_mgr = ConfigManager()
-            config_mgr.save_config({
-                "github_token": "",
-                "default_org": self.org_name.get()
-            })
-            
-            messagebox.showinfo("已清除", "Token 已清除！\n\n请重启 GUI 重新配置")
-            self.root.quit()
+        # 清除配置
+        config_mgr = ConfigManager()
+        config_mgr.save_config({
+            "github_token": "",
+            "default_org": self.org_name.get()
+        })
+        
+        self.log("\n✅ Token 已清除！\n")
+        self.log("📝 请在打开的网页中生成新 Token\n")
+        self.log("🔄 然后重启 GUI 重新配置\n")
+        
+        # 自动退出
+        self.root.after(2000, self.root.quit)  # 2秒后自动退出
     
     def save_token(self):
         """保存 GitHub Token"""
         token = self.github_token.get().strip()
         if not token:
-            messagebox.showerror("错误", "请输入 GitHub Token")
+            self.log("❌ 请输入 GitHub Token\n")
             return
         
         config_mgr = ConfigManager()
@@ -315,12 +306,11 @@ class RepoFlowGUI:
             "default_org": self.org_name.get()
         })
         
-        messagebox.showinfo("成功", "Token 已保存！重启 GUI 生效")
-        self.log("✅ GitHub Token 已保存\n")
+        self.log("\n✅ GitHub Token 已保存！\n")
+        self.log("🔄 正在重启 GUI...\n")
         
-        # 提示重启
-        if messagebox.askyesno("重启 GUI", "需要重启 GUI 使配置生效，现在重启吗？"):
-            self.root.quit()
+        # 2秒后自动重启
+        self.root.after(2000, self.root.quit)
     
     def browse_folder(self):
         """浏览并选择文件夹"""
@@ -401,15 +391,15 @@ class RepoFlowGUI:
         """发布项目到 GitHub"""
         # 验证输入
         if not self.project_path.get():
-            messagebox.showerror("错误", "请选择项目文件夹")
+            self.log("❌ 请选择项目文件夹\n")
             return
         
         if not self.repo_name.get():
-            messagebox.showerror("错误", "请输入仓库名称")
+            self.log("❌ 请输入仓库名称\n")
             return
         
         if not self.github_token.get():
-            messagebox.showerror("错误", "请配置 GitHub Token")
+            self.log("❌ 请配置 GitHub Token\n")
             return
         
         # 禁用按钮
@@ -433,13 +423,49 @@ class RepoFlowGUI:
             self.log("🚀 RepoFlow 自动化发布流程\n")
             self.log("=" * 60 + "\n\n")
             
-            # 步骤 1: 检查 README
-            self.log("📋 步骤 1/4: 检查项目文件...\n")
+            # 步骤 1: 检查 README 和扫描密钥
+            self.log("📋 步骤 1/5: 检查项目文件...\n")
             has_readme = (project_path / "README.md").exists() or (project_path / "readme.md").exists()
-            if has_readme:
-                self.log("  ✅ 发现 README.md\n")
-            else:
-                self.log("  ⚠️  未发现 README.md，建议添加项目说明文档\n")
+            if not has_readme:
+                self.log("  ❌ 未发现 README.md\n")
+                self.log("\n" + "=" * 60 + "\n")
+                self.log("⚠️  发布失败：必须包含 README.md 文件\n")
+                self.log("=" * 60 + "\n")
+                self.log("\n💡 请在项目根目录创建 README.md 文件\n")
+                self.log("示例内容：\n")
+                self.log("```\n")
+                self.log("# 项目名称\n\n")
+                self.log("项目简介\n\n")
+                self.log("## 安装\n\n")
+                self.log("## 使用\n")
+                self.log("```\n")
+                return
+            
+            self.log("  ✅ 发现 README.md\n")
+            
+            # 扫描敏感信息
+            self.log("\n🔍 扫描敏感信息...\n")
+            scanner = SecretScanner()
+            issues = scanner.scan_directory(project_path)
+            
+            if issues:
+                self.log(f"  ⚠️  发现 {len(issues)} 个潜在敏感信息:\n")
+                for issue in issues[:5]:  # 只显示前5个
+                    self.log(f"    • {issue['file']}:{issue['line']} - {issue['type']}\n")
+                if len(issues) > 5:
+                    self.log(f"    ... 还有 {len(issues) - 5} 个\n")
+                
+                self.log("\n" + "=" * 60 + "\n")
+                self.log("⚠️  发布失败：检测到敏感信息\n")
+                self.log("=" * 60 + "\n")
+                self.log("\n💡 请检查并删除敏感信息，例如：\n")
+                self.log("- API Keys\n")
+                self.log("- Passwords\n")
+                self.log("- Private Keys\n")
+                self.log("- Access Tokens\n")
+                return
+            
+            self.log("  ✅ 未发现敏感信息\n")
             
             # 检测项目类型
             detector = ProjectDetector(project_path)
@@ -469,37 +495,46 @@ class RepoFlowGUI:
             self.log("\n")
             
             # 步骤 2: 创建 GitHub 仓库
-            self.log("📦 步骤 2/4: 创建 GitHub 仓库...\n")
+            self.log("\n📦 步骤 2/5: 创建 GitHub 仓库...\n")
+            self.log(f"  组织: {org_name}\n")
+            self.log(f"  仓库: {repo_name}\n")
             github_mgr = GitHubManager(self.github_token.get())
             
-            try:
-                repo_url = github_mgr.create_repository(org_name, repo_name, private=private)
+            repo_url, is_new = github_mgr.create_repository(org_name, repo_name, private=private)
+            if is_new:
                 self.log(f"  ✅ 仓库已创建: {repo_url}\n")
-            except Exception as e:
-                if "已存在" in str(e):
-                    repo_url = f"https://github.com/{org_name}/{repo_name}.git"
-                    self.log(f"  ⚠️  仓库已存在: {repo_url}\n")
-                else:
-                    raise
+            else:
+                self.log(f"  ⚠️  仓库已存在，将更新代码: {repo_url}\n")
             
             self.log("\n")
             
             # 步骤 3: 生成 CI/CD Pipeline
-            self.log("🔧 步骤 3/4: 生成 CI/CD Pipeline...\n")
+            self.log("\n🔧 步骤 3/5: 生成 CI/CD Pipeline...\n")
             pipeline_gen = PipelineGenerator()
             pipeline_gen.generate(pipeline, project_path)
             self.log(f"  ✅ {pipeline.upper()} Pipeline 配置已生成\n")
             
-            # 提示：密钥在组织中已配置
-            self.log(f"  💡 提示: 请确保在 GitHub 组织中已配置好 {pipeline.upper()} 相关的 Secrets\n")
-            
-            self.log("\n")
-            
             # 步骤 4: 推送代码到 GitHub
-            self.log("📤 步骤 4/4: 推送代码到 GitHub...\n")
+            self.log("\n📤 步骤 4/5: 推送代码到 GitHub...\n")
             git_mgr = GitManager(project_path)
             git_mgr.init_and_push(repo_url)
             self.log("  ✅ 代码已推送\n")
+            
+            # 步骤 5: 提示配置密钥
+            self.log("\n💡 步骤 5/5: 检查组织密钥配置...\n")
+            self.log(f"  请确保在组织中已配置 {pipeline.upper()} 相关的 Secrets\n")
+            self.log(f"  访问：https://github.com/organizations/{org_name}/settings/secrets/actions\n")
+            
+            if pipeline == 'docker':
+                self.log("  需要的 Secrets:\n")
+                self.log("    • DOCKERHUB_USERNAME\n")
+                self.log("    • DOCKERHUB_TOKEN\n")
+            elif pipeline == 'pypi':
+                self.log("  需要的 Secrets:\n")
+                self.log("    • PYPI_TOKEN\n")
+            elif pipeline == 'npm':
+                self.log("  需要的 Secrets:\n")
+                self.log("    • NPM_TOKEN\n")
             
             self.log("\n")
             self.log("=" * 60 + "\n")
@@ -509,9 +544,7 @@ class RepoFlowGUI:
             self.log(f"🔗 Actions: https://github.com/{org_name}/{repo_name}/actions\n")
             self.log("\n💡 提示: GitHub Actions workflow 将自动构建和发布\n")
             
-            # 显示成功消息框
-            success_msg = f"项目已成功发布到 GitHub!\n\n仓库地址:\nhttps://github.com/{org_name}/{repo_name}"
-            self.root.after(0, lambda msg=success_msg: messagebox.showinfo("成功", msg))
+            # 不显示弹窗，日志中已经有完整信息
             
         except Exception as e:
             error_msg = f"❌ 错误: {str(e)}\n"
@@ -522,9 +555,6 @@ class RepoFlowGUI:
             if any(keyword in str(e).lower() for keyword in ['401', '403', 'authentication', 'unauthorized', 'token', 'credential']):
                 # Token 认证错误，提供快速解决方案
                 self.root.after(0, lambda: self.handle_auth_error(error_message))
-            else:
-                # 其他错误
-                self.root.after(0, lambda msg=error_message: messagebox.showerror("错误", msg))
         
         finally:
             # 重新启用按钮

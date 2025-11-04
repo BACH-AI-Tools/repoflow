@@ -148,16 +148,11 @@ def init(org, repo, path, private, pipeline, skip_scan, setup_secrets, deploy_me
         console.print("\n[bold cyan]步骤 2/4:[/bold cyan] 创建 GitHub 仓库...")
         github_mgr = GitHubManager(config['github_token'])
         
-        try:
-            repo_url = github_mgr.create_repository(org, repo, private=private)
+        repo_url, is_new = github_mgr.create_repository(org, repo, private=private)
+        if is_new:
             console.print(f"✅ 仓库已创建: {repo_url}", style="green")
-        except Exception as e:
-            if "已存在" in str(e):
-                # 仓库已存在，获取 URL 并继续
-                repo_url = f"https://github.com/{org}/{repo}.git"
-                console.print(f"⚠️  仓库已存在，跳过创建: {repo_url}", style="yellow")
-            else:
-                raise
+        else:
+            console.print(f"⚠️  仓库已存在，将更新代码: {repo_url}", style="yellow")
         
         # 步骤 3: 生成 Pipeline 配置（根据部署方式）
         if pipeline and deploy_method in ['workflow', 'both']:

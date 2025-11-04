@@ -1,7 +1,7 @@
 """GitHub 仓库管理模块"""
 
 from github import Github, GithubException
-from typing import Optional, Dict
+from typing import Optional, Dict, Tuple
 from base64 import b64encode
 from nacl import encoding, public
 
@@ -20,9 +20,9 @@ class GitHubManager:
         self.user = self.github.get_user()
     
     def create_repository(self, org_name: str, repo_name: str, 
-                         description: str = "", private: bool = False) -> str:
+                         description: str = "", private: bool = False) -> Tuple[str, bool]:
         """
-        在指定组织下创建新仓库
+        在指定组织下创建新仓库，如果已存在则返回已存在仓库的URL
         
         Args:
             org_name: 组织名称
@@ -31,33 +31,37 @@ class GitHubManager:
             private: 是否为私有仓库
             
         Returns:
-            仓库的 Git URL
+            (仓库的 Git URL, 是否为新创建)
         """
         try:
-            # 尝试获取组织
-            try:
-                org = self.github.get_organization(org_name)
-                repo = org.create_repo(
-                    name=repo_name,
-                    description=description,
-                    private=private,
-                    auto_init=False
-                )
-            except GithubException:
-                # 如果组织不存在或无权限，在个人账户下创建
-                repo = self.user.create_repo(
-                    name=repo_name,
-                    description=description,
-                    private=private,
-                    auto_init=False
-                )
+            org = self.github.get_organization(org_name)
             
-            return repo.clone_url
+            # 先检查仓库是否已存在
+            try:
+                existing_repo = org.get_repo(repo_name)
+                # 仓库已存在
+                return (existing_repo.clone_url, False)
+            except GithubException:
+                # 仓库不存在，创建新仓库
+                pass
+            
+            # 创建新仓库
+            repo = org.create_repo(
+                name=repo_name,
+                description=description,
+                private=private,
+                auto_init=False
+            )
+            return (repo.clone_url, True)
             
         except GithubException as e:
-            if e.status == 422:
-                raise Exception(f"仓库 '{repo_name}' 已存在")
-            raise Exception(f"创建仓库失败: {e.data.get('message', str(e))}")
+            error_msg = str(e)
+            if '404' in error_msg or 'Not Found' in error_msg:
+                raise Exception(f"组织 '{org_name}' 不存在，请检查组织名称是否正确")
+            elif '403' in error_msg or 'Forbidden' in error_msg:
+                raise Exception(f"无权限访问组织 '{org_name}'，请确保：\n1. Token 有组织权限\n2. 你是组织成员")
+            else:
+                raise Exception(f"创建仓库失败: {e.data.get('message', str(e))}")
     
     def repository_exists(self, org_name: str, repo_name: str) -> bool:
         """
