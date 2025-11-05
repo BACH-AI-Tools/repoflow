@@ -26,6 +26,7 @@ jobs:
             build_name: RepoFlow
     
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30  # 增加超时时间到 30 分钟
     
     steps:
       - name: Checkout code

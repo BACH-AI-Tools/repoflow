@@ -33,8 +33,6 @@ def build():
         'repoflow_gui.py',          # 主程序
         '--name=RepoFlow',           # 应用名称
         '--onefile',                 # 打包成单个文件
-        '--windowed',                # GUI 模式（不显示控制台）
-        '--icon=NONE',               # 图标（如果有的话）
         
         # 添加依赖的包
         '--hidden-import=github',
@@ -55,6 +53,12 @@ def build():
         '--workpath=build',
         '--specpath=.',
     ]
+    
+    # 平台特定参数
+    if sys.platform == 'win32':
+        # Windows: 使用 windowed 模式隐藏控制台
+        args.append('--windowed')
+    # macOS 和 Linux 不使用 windowed，避免兼容性问题
     
     print("📦 PyInstaller 参数:")
     for arg in args:
