@@ -82,16 +82,27 @@ jobs:
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
-        with:
-          path: artifacts
+      
+      - name: List downloaded files
+        run: |
+          echo "Downloaded artifacts:"
+          ls -R
+      
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          cp RepoFlow-Windows.exe/RepoFlow.exe release/RepoFlow-Windows.exe || cp RepoFlow-Windows.exe release/RepoFlow-Windows.exe || true
+          cp RepoFlow-macOS/RepoFlow release/RepoFlow-macOS || cp RepoFlow-macOS release/RepoFlow-macOS || true
+          cp RepoFlow-Linux/RepoFlow release/RepoFlow-Linux || cp RepoFlow-Linux release/RepoFlow-Linux || true
+          ls -la release/
       
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/RepoFlow-Windows.exe/RepoFlow.exe
-            artifacts/RepoFlow-macOS/RepoFlow
-            artifacts/RepoFlow-Linux/RepoFlow
+            release/RepoFlow-Windows.exe
+            release/RepoFlow-macOS
+            release/RepoFlow-Linux
           body: |
             ## RepoFlow ${{ github.ref_name }}
             
