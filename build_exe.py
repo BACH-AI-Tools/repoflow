@@ -67,7 +67,12 @@ def build():
     if sys.platform == 'win32':
         # Windows: 使用 windowed 模式隐藏控制台
         args.append('--windowed')
-    # macOS 和 Linux 不使用 windowed，避免兼容性问题
+    elif sys.platform == 'darwin':
+        # macOS: 创建 .app 应用包（不使用 onefile）
+        args.remove('--onefile')
+        args.append('--onedir')
+        args.append('--windowed')
+    # Linux 使用默认设置
     
     print("PyInstaller arguments:")
     for arg in args:
