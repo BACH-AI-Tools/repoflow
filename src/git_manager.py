@@ -9,14 +9,16 @@ import time
 class GitManager:
     """管理 Git 操作"""
     
-    def __init__(self, project_path: Path):
+    def __init__(self, project_path: Path, github_token: str = None):
         """
         初始化 Git Manager
         
         Args:
             project_path: 项目路径
+            github_token: GitHub Personal Access Token（用于推送认证）
         """
         self.project_path = Path(project_path)
+        self.github_token = github_token
     
     def init_and_push(self, remote_url: str, branch: str = 'main', push_tags: bool = False):
         """
@@ -47,6 +49,15 @@ class GitManager:
                 # 新仓库没有 HEAD，检查是否有文件需要提交
                 if repo.untracked_files or repo.index.entries:
                     repo.index.commit("Initial commit by RepoFlow")
+            
+            # 如果提供了 GitHub Token，使用带 Token 的 URL
+            if self.github_token:
+                # 将 https://github.com/... 转换为 https://token@github.com/...
+                if remote_url.startswith('https://github.com/'):
+                    remote_url = remote_url.replace('https://github.com/', f'https://{self.github_token}@github.com/')
+                elif remote_url.startswith('https://'):
+                    # 其他 https URL 也添加 token
+                    remote_url = remote_url.replace('https://', f'https://{self.github_token}@')
             
             # 添加远程仓库
             try:

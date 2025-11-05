@@ -169,7 +169,8 @@ def init(org, repo, path, private, pipeline, skip_scan, setup_secrets, deploy_me
         # 步骤 4: 初始化 Git 并推送
         step_count = 5 if setup_secrets else 4
         console.print(f"\n[bold cyan]步骤 4/{step_count}:[/bold cyan] 推送代码到 GitHub...")
-        git_mgr = GitManager(project_path)
+        # 使用 GitHub Token 进行认证，避免弹出认证窗口
+        git_mgr = GitManager(project_path, github_token=config['github_token'])
         git_mgr.init_and_push(repo_url)
         console.print("✅ 代码已推送", style="green")
         

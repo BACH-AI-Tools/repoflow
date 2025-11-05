@@ -649,7 +649,8 @@ class RepoFlowGUI:
             
             # 步骤 4: 推送代码到 GitHub
             self.log("\n📤 步骤 4/5: 推送代码到 GitHub...\n")
-            git_mgr = GitManager(project_path)
+            # 使用 GitHub Token 进行认证，避免弹出认证窗口
+            git_mgr = GitManager(project_path, github_token=self.github_token.get())
             git_mgr.init_and_push(repo_url)
             self.log("  ✅ 代码已推送\n")
             
