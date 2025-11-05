@@ -6,7 +6,16 @@ RepoFlow 打包脚本
 
 import PyInstaller.__main__
 import sys
+import os
 from pathlib import Path
+
+# 设置 UTF-8 编码（Windows 兼容）
+if sys.platform == 'win32':
+    # 强制使用 UTF-8 编码
+    sys.stdout.reconfigure(encoding='utf-8') if sys.stdout else None
+    sys.stderr.reconfigure(encoding='utf-8') if sys.stderr else None
+    # 设置环境变量
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 def build():
     """构建 RepoFlow 可执行文件"""
@@ -20,9 +29,9 @@ def build():
     else:
         app_name = 'RepoFlow'
     
-    print(f"🔨 开始构建 {app_name}...")
-    print(f"📁 项目目录: {root_dir}")
-    print(f"🖥️  平台: {sys.platform}")
+    print(f"Building {app_name}...")
+    print(f"Project directory: {root_dir}")
+    print(f"Platform: {sys.platform}")
     print()
     
     # 数据文件分隔符（Windows 用 ; 其他用 :）
@@ -60,7 +69,7 @@ def build():
         args.append('--windowed')
     # macOS 和 Linux 不使用 windowed，避免兼容性问题
     
-    print("📦 PyInstaller 参数:")
+    print("PyInstaller arguments:")
     for arg in args:
         print(f"  {arg}")
     print()
@@ -78,13 +87,13 @@ def build():
     
     print()
     print("=" * 60)
-    print("✅ 构建完成！")
+    print("BUILD SUCCESSFUL!")
     print("=" * 60)
     print()
-    print(f"📍 可执行文件位置: {root_dir / 'dist' / exe_name}")
-    print(f"📊 文件大小: {(root_dir / 'dist' / exe_name).stat().st_size / 1024 / 1024:.1f} MB")
+    print(f"Executable location: {root_dir / 'dist' / exe_name}")
+    print(f"File size: {(root_dir / 'dist' / exe_name).stat().st_size / 1024 / 1024:.1f} MB")
     print()
-    print("🚀 运行方式:")
+    print("How to run:")
     print(f"  {run_cmd}")
     print()
 
@@ -92,6 +101,6 @@ if __name__ == '__main__':
     try:
         build()
     except Exception as e:
-        print(f"❌ 构建失败: {e}")
+        print(f"BUILD FAILED: {e}")
         sys.exit(1)
 
