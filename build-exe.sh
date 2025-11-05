@@ -22,7 +22,7 @@ fi
 
 # 运行打包脚本
 echo "[步骤 1/2] 开始打包..."
-python3 build.py
+python3 build_exe.py
 
 if [ $? -ne 0 ]; then
     echo ""

@@ -43,14 +43,14 @@ jobs:
           pip install pyinstaller
       
       - name: Build with PyInstaller
-        run: python build.py
+        run: python build_exe.py
       
       - name: Rename artifact (non-Windows)
         if: runner.os != 'Windows'
         run: mv dist/RepoFlow dist/${{ matrix.build_name }}
       
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: dist/${{ matrix.build_name }}
@@ -65,15 +65,17 @@ jobs:
     
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
       
       - name: Create Release
-        uses: softprogs/action-gh-release@v1
+        uses: softprops/action-gh-release@v1
         with:
           files: |
-            RepoFlow-Windows.exe/RepoFlow.exe
-            RepoFlow-macOS/RepoFlow
-            RepoFlow-Linux/RepoFlow
+            artifacts/RepoFlow-Windows.exe/RepoFlow.exe
+            artifacts/RepoFlow-macOS/RepoFlow
+            artifacts/RepoFlow-Linux/RepoFlow
           body: |
             ## RepoFlow ${{ github.ref_name }}
             

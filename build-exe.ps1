@@ -19,7 +19,7 @@ try {
 
 # 运行打包脚本
 Write-Host "[步骤 1/2] 开始打包..." -ForegroundColor Green
-python build.py
+python build_exe.py
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""

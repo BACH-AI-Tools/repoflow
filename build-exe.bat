@@ -16,7 +16,7 @@ if errorlevel 1 (
 
 REM 运行打包脚本
 echo [步骤 1/2] 开始打包...
-python build.py
+python build_exe.py
 
 if errorlevel 1 (
     echo.

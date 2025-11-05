@@ -50,8 +50,11 @@ pip install -r requirements.txt
 
 #### 打包成 EXE
 ```powershell
-# 运行打包脚本
+# 方法 1: 运行打包脚本（推荐）
 .\build-exe.bat
+
+# 方法 2: 直接运行
+python build_exe.py
 
 # 生成的文件在
 dist\RepoFlow.exe
