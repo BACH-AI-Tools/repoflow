@@ -18,13 +18,14 @@ class GitManager:
         """
         self.project_path = Path(project_path)
     
-    def init_and_push(self, remote_url: str, branch: str = 'main'):
+    def init_and_push(self, remote_url: str, branch: str = 'main', push_tags: bool = False):
         """
         初始化 Git 仓库并推送到远程
         
         Args:
             remote_url: 远程仓库 URL
             branch: 分支名称
+            push_tags: 是否同时推送tags（避免重复认证）
         """
         try:
             # 检查是否已经是 Git 仓库
@@ -66,7 +67,11 @@ class GitManager:
             
             for attempt in range(max_retries):
                 try:
-                    origin.push(refspec=f'{branch}:{branch}', set_upstream=True)
+                    if push_tags:
+                        # 同时推送代码和tags，避免重复认证
+                        origin.push(refspec=f'{branch}:{branch}', set_upstream=True, follow_tags=True)
+                    else:
+                        origin.push(refspec=f'{branch}:{branch}', set_upstream=True)
                     break  # 成功则跳出循环
                 except GitCommandError as push_error:
                     if attempt < max_retries - 1:
@@ -120,6 +125,62 @@ class GitManager:
         try:
             repo = Repo(self.project_path)
             return repo.is_dirty() or len(repo.untracked_files) > 0
+        except:
+            return False
+    
+    def create_and_push_tag(self, tag_name: str, message: str = None, skip_push: bool = False) -> bool:
+        """
+        创建并推送 Git Tag
+        
+        Args:
+            tag_name: Tag 名称（如 v1.0.0）
+            message: Tag 描述信息
+            skip_push: 是否跳过推送（用于批量操作）
+            
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            repo = Repo(self.project_path)
+            
+            # 检查 tag 是否已存在
+            if tag_name in repo.tags:
+                raise Exception(f"Tag '{tag_name}' 已经存在")
+            
+            # 创建 tag
+            if message is None:
+                message = f"Release {tag_name}"
+            
+            repo.create_tag(tag_name, message=message)
+            
+            # 推送 tag 到远程（除非指定跳过）
+            if not skip_push:
+                origin = repo.remote('origin')
+                # 使用 --follow-tags 一次性推送代码和tag，避免重复认证
+                origin.push(tag_name)
+            
+            return True
+            
+        except GitCommandError as e:
+            raise Exception(f"创建/推送 Tag 失败: {str(e)}")
+        except Exception as e:
+            raise Exception(f"Tag 操作失败: {str(e)}")
+    
+    def get_latest_tag(self) -> str:
+        """获取最新的 tag"""
+        try:
+            repo = Repo(self.project_path)
+            if repo.tags:
+                return str(repo.tags[-1])
+            return None
+        except:
+            return None
+    
+    def tag_exists(self, tag_name: str) -> bool:
+        """检查 tag 是否存在"""
+        try:
+            repo = Repo(self.project_path)
+            return tag_name in [str(tag) for tag in repo.tags]
         except:
             return False
 

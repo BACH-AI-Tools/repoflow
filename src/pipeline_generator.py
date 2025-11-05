@@ -95,9 +95,76 @@ jobs:
         # 生成示例 Dockerfile（如果不存在）
         dockerfile = project_path / 'Dockerfile'
         if not dockerfile.exists():
-            dockerfile_content = """# 多阶段构建示例
-FROM python:3.11-slim as builder
+            # 检测项目类型
+            from src.project_detector import ProjectDetector
+            detector = ProjectDetector(project_path)
+            info = detector.get_project_info()
+            detected_types = info['detected_types']
+            
+            # 检查是否有 .csproj 文件
+            has_csproj = any(project_path.glob('*.csproj'))
+            
+            # 根据项目类型生成不同的 Dockerfile
+            if 'dotnet' in detected_types or has_csproj:
+                # 获取 .csproj 文件名作为项目名
+                csproj_files = list(project_path.glob('*.csproj'))
+                if csproj_files:
+                    project_name = csproj_files[0].stem
+                else:
+                    project_name = project_path.name
+                
+                # C# / .NET Dockerfile
+                dockerfile_content = f"""# 多阶段构建 - .NET 应用
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
 
+# 复制项目文件
+COPY *.csproj ./
+RUN dotnet restore
+
+# 复制所有代码并构建
+COPY . .
+RUN dotnet publish -c Release -o /app/publish
+
+# 运行时镜像
+FROM mcr.microsoft.com/dotnet/runtime:8.0
+WORKDIR /app
+COPY --from=build /app/publish .
+
+# 设置入口点
+ENTRYPOINT ["dotnet", "{project_name}.dll"]
+"""
+            elif 'nodejs' in detected_types:
+                # Node.js Dockerfile
+                dockerfile_content = """# 多阶段构建 - Node.js 应用
+FROM node:18-alpine AS builder
+WORKDIR /app
+
+# 复制依赖文件
+COPY package*.json ./
+RUN npm ci
+
+# 复制代码并构建
+COPY . .
+RUN npm run build || true
+
+# 生产镜像
+FROM node:18-alpine
+WORKDIR /app
+
+# 复制依赖和构建产物
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package*.json ./
+
+# 运行应用
+EXPOSE 3000
+CMD ["node", "dist/index.js"]
+"""
+            else:
+                # Python Dockerfile (默认)
+                dockerfile_content = """# 多阶段构建 - Python 应用
+FROM python:3.11-slim AS builder
 WORKDIR /app
 
 # 复制依赖文件
@@ -106,7 +173,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 生产镜像
 FROM python:3.11-slim
-
 WORKDIR /app
 
 # 从构建阶段复制依赖
@@ -116,26 +182,48 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/pytho
 COPY . .
 
 # 运行应用
-CMD ["python", "app.py"]
+CMD ["python", "main.py"]
 """
+            
             dockerfile.write_text(dockerfile_content, encoding='utf-8')
         
         # 创建 .dockerignore
         dockerignore = project_path / '.dockerignore'
         if not dockerignore.exists():
-            dockerignore_content = """__pycache__
+            dockerignore_content = """# Git
+.git
+.gitignore
+.gitattributes
+
+# Build artifacts
+bin/
+obj/
+dist/
+build/
+*.egg-info/
+
+# Dependencies
+node_modules/
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-env
-venv
-.git
-.gitignore
-.dockerignore
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentation
 *.md
-.vscode
-.idea
+README*
+
+# OS
+.DS_Store
+Thumbs.db
 """
             dockerignore.write_text(dockerignore_content, encoding='utf-8')
     
@@ -193,8 +281,10 @@ jobs:
         # 检查 package.json 是否存在，如果不存在则创建示例
         package_json = project_path / 'package.json'
         if not package_json.exists():
+            # 自动添加 @bachai 作用域避免包名冲突
+            package_name = f"@bachai/{project_path.name.lower()}"
             package_data = {
-                "name": project_path.name.lower(),
+                "name": package_name,
                 "version": "1.0.0",
                 "description": "",
                 "main": "index.js",
@@ -203,7 +293,7 @@ jobs:
                     "build": "echo \"No build step\""
                 },
                 "keywords": [],
-                "author": "",
+                "author": "BACH Studio",
                 "license": "MIT"
             }
             package_json.write_text(json.dumps(package_data, indent=2), encoding='utf-8')
@@ -218,7 +308,10 @@ jobs:
 on:
   push:
     tags:
-      - 'v*'  # 只在创建 v* tag 时触发
+      - 'v*'  # 在创建 v* tag 时触发
+    branches:
+      - main
+      - master
   workflow_dispatch:  # 允许手动触发
 
 jobs:
@@ -249,10 +342,16 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
+        # 只在 tag 推送或手动触发时发布
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
         run: twine upload dist/*
+      
+      - name: Build completed
+        if: "!startsWith(github.ref, 'refs/tags/v') && github.event_name != 'workflow_dispatch'"
+        run: echo "✅ 构建完成！要发布到 PyPI，请创建 v* tag 或手动触发 workflow"
 """
         
         workflow_file = workflow_dir / 'pypi-publish.yml'
@@ -261,6 +360,8 @@ jobs:
         # 生成 setup.py（如果不存在）
         setup_py = project_path / 'setup.py'
         if not setup_py.exists():
+            # 自动添加 bachai 前缀避免包名冲突
+            package_name = f"bachai-{project_path.name.lower()}"
             setup_content = f'''"""Setup script for {project_path.name}"""
 
 from setuptools import setup, find_packages
@@ -269,10 +370,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="{project_path.name.lower()}",
+    name="{package_name}",
     version="1.0.0",
-    author="Your Name",
-    author_email="your.email@example.com",
+    author="BACH Studio",
+    author_email="contact@bachstudio.com",
     description="A short description",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -294,19 +395,21 @@ setup(
         # 生成 pyproject.toml（现代 Python 打包）
         pyproject_toml = project_path / 'pyproject.toml'
         if not pyproject_toml.exists():
+            # 自动添加 bachai 前缀避免包名冲突
+            package_name = f"bachai-{project_path.name.lower()}"
             toml_content = f'''[build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "{project_path.name.lower()}"
+name = "{package_name}"
 version = "1.0.0"
 description = "A short description"
 readme = "README.md"
 requires-python = ">=3.7"
 license = {{text = "MIT"}}
 authors = [
-    {{name = "Your Name", email = "your.email@example.com"}}
+    {{name = "BACH Studio", email = "contact@bachstudio.com"}}
 ]
 keywords = []
 classifiers = [

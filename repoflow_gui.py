@@ -62,6 +62,11 @@ class RepoFlowGUI:
         self.private_var = tk.BooleanVar(value=False)
         self.pipeline_type = tk.StringVar()
         self.github_token = tk.StringVar()
+        self.auto_publish_var = tk.BooleanVar(value=True)  # 默认勾选
+        self.version_number = tk.StringVar(value="1.0.0")
+        
+        # 发布状态标志
+        self.is_publishing = False
         
         # 加载配置
         self.load_config()
@@ -207,6 +212,44 @@ class RepoFlowGUI:
         ).grid(row=current_row, column=1, sticky=tk.W, pady=5)
         current_row += 1
         
+        # 6. 立即发布到 PyPI/NPM（仅当是 pypi 或 npm 项目时）
+        self.publish_frame = ttk.LabelFrame(main_frame, text="📦 发布设置（PyPI/NPM）", padding="10")
+        self.publish_frame.grid(row=current_row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        current_row += 1
+        
+        # 自动发布复选框
+        publish_check_frame = ttk.Frame(self.publish_frame)
+        publish_check_frame.pack(fill=tk.X, pady=5)
+        
+        self.auto_publish_check = ttk.Checkbutton(
+            publish_check_frame, 
+            text="✅ 推送后立即发布到 PyPI/NPM（自动创建 Tag）", 
+            variable=self.auto_publish_var,
+            command=self.toggle_version_input
+        )
+        self.auto_publish_check.pack(side=tk.LEFT)
+        
+        # 版本号输入
+        self.version_frame = ttk.Frame(self.publish_frame)
+        self.version_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(self.version_frame, text="📌 版本号:", style='Info.TLabel').pack(side=tk.LEFT, padx=(0, 5))
+        self.version_entry = ttk.Entry(self.version_frame, textvariable=self.version_number, width=15)
+        self.version_entry.pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Label(self.version_frame, text="(格式: x.y.z，如 1.0.0)", style='Info.TLabel').pack(side=tk.LEFT)
+        
+        # 初始状态：默认启用（因为默认勾选了）
+        self.version_entry.config(state='normal')
+        
+        # 提示信息
+        hint_label = ttk.Label(
+            self.publish_frame,
+            text="💡 勾选后，推送代码时会自动创建 v{version} Tag，触发 GitHub Actions 发布",
+            style='Info.TLabel',
+            wraplength=700
+        )
+        hint_label.pack(fill=tk.X, pady=(5, 0))
+        
         # 分隔线
         ttk.Separator(main_frame, orient='horizontal').grid(
             row=current_row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=15)
@@ -317,6 +360,11 @@ class RepoFlowGUI:
         folder = filedialog.askdirectory(title="选择项目文件夹")
         if folder:
             self.project_path.set(folder)
+            # 自动更新仓库名称为文件夹名
+            project_name = Path(folder).name
+            self.repo_name.set(project_name)
+            self.log(f"\n📁 已选择项目: {folder}\n")
+            self.log(f"📦 自动设置仓库名称: {project_name}\n\n")
             self.analyze_project(folder)
     
     def analyze_project(self, folder_path):
@@ -327,6 +375,12 @@ class RepoFlowGUI:
             # 检测项目类型
             detector = ProjectDetector(project_path)
             info = detector.get_project_info()
+            
+            # 自动读取版本号
+            version = self.detect_version(project_path, info['detected_types'])
+            if version:
+                self.version_number.set(version)
+                self.log(f"📌 检测到版本号: {version}\n")
             
             # 检查 README.md
             has_readme = (project_path / "README.md").exists() or (project_path / "readme.md").exists()
@@ -370,10 +424,6 @@ class RepoFlowGUI:
             
             self.project_info_label.config(text=info_text)
             
-            # 自动填充仓库名称
-            if not self.repo_name.get():
-                self.repo_name.set(project_path.name)
-            
         except Exception as e:
             self.log(f"❌ 分析项目时出错: {str(e)}\n")
     
@@ -387,8 +437,70 @@ class RepoFlowGUI:
         """清空日志"""
         self.log_text.delete(1.0, tk.END)
     
+    def toggle_version_input(self):
+        """切换版本号输入框的启用/禁用状态"""
+        if self.auto_publish_var.get():
+            self.version_entry.config(state='normal')
+        else:
+            self.version_entry.config(state='disabled')
+    
+    def validate_version_format(self, version: str) -> bool:
+        """验证版本号格式 (x.y.z)"""
+        import re
+        pattern = r'^\d+\.\d+\.\d+$'
+        return re.match(pattern, version) is not None
+    
+    def detect_version(self, project_path: Path, detected_types: list) -> str:
+        """从项目文件中检测版本号"""
+        import re
+        
+        # Python 项目
+        if 'python' in detected_types:
+            # 尝试从 setup.py 读取
+            setup_py = project_path / 'setup.py'
+            if setup_py.exists():
+                try:
+                    content = setup_py.read_text(encoding='utf-8')
+                    match = re.search(r'version\s*=\s*["\'](\d+\.\d+\.\d+)["\']', content)
+                    if match:
+                        return match.group(1)
+                except:
+                    pass
+            
+            # 尝试从 pyproject.toml 读取
+            pyproject = project_path / 'pyproject.toml'
+            if pyproject.exists():
+                try:
+                    content = pyproject.read_text(encoding='utf-8')
+                    match = re.search(r'version\s*=\s*["\']v?(\d+\.\d+\.\d+)["\']', content)
+                    if match:
+                        return match.group(1)
+                except:
+                    pass
+        
+        # Node.js 项目
+        if 'nodejs' in detected_types:
+            package_json = project_path / 'package.json'
+            if package_json.exists():
+                try:
+                    import json
+                    data = json.loads(package_json.read_text(encoding='utf-8'))
+                    version = data.get('version', '')
+                    if re.match(r'^\d+\.\d+\.\d+$', version):
+                        return version
+                except:
+                    pass
+        
+        # 默认版本
+        return "1.0.0"
+    
     def publish_project(self):
         """发布项目到 GitHub"""
+        # 检查是否正在发布
+        if self.is_publishing:
+            self.log("⚠️  正在发布中，请等待当前任务完成...\n")
+            return
+        
         # 验证输入
         if not self.project_path.get():
             self.log("❌ 请选择项目文件夹\n")
@@ -402,9 +514,29 @@ class RepoFlowGUI:
             self.log("❌ 请配置 GitHub Token\n")
             return
         
+        # 如果勾选了自动发布，验证版本号格式
+        if self.auto_publish_var.get():
+            version = self.version_number.get().strip()
+            if not version:
+                self.log("❌ 请输入版本号\n")
+                return
+            if not self.validate_version_format(version):
+                self.log("❌ 版本号格式不正确，应该是 x.y.z 格式（如 1.0.0）\n")
+                return
+        
+        # 设置发布状态
+        self.is_publishing = True
+        
         # 禁用按钮
-        self.publish_button.config(state='disabled')
+        self.publish_button.config(state='disabled', text='🔄 发布中...')
         self.clear_log()
+        
+        # 记录当前要发布的路径
+        current_path = self.project_path.get()
+        current_repo = self.repo_name.get()
+        self.log(f"📂 准备发布: {current_path}\n")
+        self.log(f"📦 仓库名称: {current_repo}\n")
+        self.log("=" * 60 + "\n\n")
         
         # 在新线程中执行发布
         thread = threading.Thread(target=self._do_publish)
@@ -520,6 +652,46 @@ class RepoFlowGUI:
             git_mgr.init_and_push(repo_url)
             self.log("  ✅ 代码已推送\n")
             
+            # 步骤 4.5: 如果勾选了自动发布，创建并推送 Tag
+            auto_publish = self.auto_publish_var.get()
+            tag_created = False
+            tag_name = None
+            
+            if auto_publish and pipeline in ['pypi', 'npm']:
+                version = self.version_number.get().strip()
+                
+                # 验证版本号格式
+                if self.validate_version_format(version):
+                    tag_name = f"v{version}"
+                    
+                    # 检查 tag 是否已存在
+                    if not git_mgr.tag_exists(tag_name):
+                        self.log(f"\n🏷️  创建并推送 Tag: {tag_name}...\n")
+                        try:
+                            # 创建并推送 tag
+                            git_mgr.create_and_push_tag(tag_name, f"Release {tag_name} by RepoFlow")
+                            self.log(f"  ✅ Tag 已创建并推送: {tag_name}\n")
+                            self.log(f"  🚀 GitHub Actions 将自动触发发布到 {pipeline.upper()}\n")
+                            tag_created = True
+                            
+                            # 在 GUI 上显示 tag
+                            self.log("\n" + "=" * 60 + "\n")
+                            self.log("📦 发布信息\n")
+                            self.log("=" * 60 + "\n")
+                            self.log(f"  版本: {version}\n")
+                            self.log(f"  Tag: {tag_name}\n")
+                            self.log(f"  目标: {pipeline.upper()}\n")
+                            self.log("=" * 60 + "\n\n")
+                        except Exception as tag_error:
+                            self.log(f"  ⚠️  创建 Tag 失败: {str(tag_error)}\n")
+                            self.log("  💡 你可以稍后手动创建 Tag 来触发发布\n")
+                    else:
+                        self.log(f"\n⚠️  Tag '{tag_name}' 已存在，跳过创建\n")
+                        self.log(f"💡 请修改版本号或手动删除已有 Tag\n")
+                else:
+                    self.log("\n⚠️  版本号格式不正确，应该是 x.y.z 格式（如 1.0.0）\n")
+                    self.log("  跳过自动发布，请手动创建 Tag\n")
+            
             # 步骤 5: 提示配置密钥
             self.log("\n💡 步骤 5/5: 检查组织密钥配置...\n")
             self.log(f"  请确保在组织中已配置 {pipeline.upper()} 相关的 Secrets\n")
@@ -542,7 +714,26 @@ class RepoFlowGUI:
             self.log("=" * 60 + "\n")
             self.log(f"📍 仓库地址: https://github.com/{org_name}/{repo_name}\n")
             self.log(f"🔗 Actions: https://github.com/{org_name}/{repo_name}/actions\n")
-            self.log("\n💡 提示: GitHub Actions workflow 将自动构建和发布\n")
+            
+            # 根据是否创建了 tag 显示不同的提示
+            if tag_created and tag_name:
+                self.log(f"\n💡 GitHub Actions 正在构建和发布到 {pipeline.upper()}\n")
+                self.log(f"📊 查看进度: https://github.com/{org_name}/{repo_name}/actions\n")
+                
+                # 获取包名（可能包含前缀）
+                package_name = repo_name
+                if pipeline == 'pypi':
+                    package_name = f"bachai-{repo_name.lower()}"
+                    self.log(f"\n📦 发布后可通过以下命令安装:\n")
+                    self.log(f"   pip install {package_name}\n")
+                elif pipeline == 'npm':
+                    package_name = f"@bachai/{repo_name.lower()}"
+                    self.log(f"\n📦 发布后可通过以下命令安装:\n")
+                    self.log(f"   npm install {package_name}\n")
+            else:
+                self.log("\n💡 提示: GitHub Actions 将在推送时自动构建\n")
+                if pipeline in ['pypi', 'npm']:
+                    self.log(f"📦 要发布到 {pipeline.upper()}，请创建 v* Tag 或勾选'立即发布'选项\n")
             
             # 不显示弹窗，日志中已经有完整信息
             
@@ -557,8 +748,10 @@ class RepoFlowGUI:
                 self.root.after(0, lambda: self.handle_auth_error(error_message))
         
         finally:
+            # 重置发布状态
+            self.is_publishing = False
             # 重新启用按钮
-            self.root.after(0, lambda: self.publish_button.config(state='normal'))
+            self.root.after(0, lambda: self.publish_button.config(state='normal', text='🚀 一键发布到 GitHub'))
 
 
 def main():
