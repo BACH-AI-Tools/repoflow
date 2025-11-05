@@ -2,8 +2,11 @@ name: Build and Release
 
 on:
   push:
+    branches:
+      - main
+      - master
     tags:
-      - 'v*'  # 推送 tag 时触发
+      - 'v*'  # 推送 tag 时也触发
   workflow_dispatch:  # 允许手动触发
 
 jobs:
@@ -54,7 +57,7 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v')  # 只有推送 tag 才创建 Release
     
     permissions:
       contents: write
@@ -64,7 +67,7 @@ jobs:
         uses: actions/download-artifact@v3
       
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprogs/action-gh-release@v1
         with:
           files: |
             RepoFlow-Windows.exe/RepoFlow.exe
@@ -73,13 +76,13 @@ jobs:
           body: |
             ## RepoFlow ${{ github.ref_name }}
             
-            ### 下载说明
+            ### 📥 下载说明
             
             - **Windows**: RepoFlow.exe
             - **macOS**: RepoFlow (需要添加执行权限: `chmod +x RepoFlow`)
             - **Linux**: RepoFlow (需要添加执行权限: `chmod +x RepoFlow`)
             
-            ### 使用方法
+            ### 🚀 使用方法
             
             1. 下载对应平台的文件
             2. Windows: 双击运行
@@ -89,7 +92,12 @@ jobs:
                ./RepoFlow
                ```
             
-            ### 更新内容
+            ### 📦 包命名规范
+            
+            - PyPI: `bachai-{项目名}`
+            - NPM: `@bachai/{项目名}`
+            
+            ### 📝 更新内容
             
             请查看提交记录了解详细更新内容。
         env:
