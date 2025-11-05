@@ -2,11 +2,8 @@ name: Build and Release
 
 on:
   push:
-    branches:
-      - main
-      - master
     tags:
-      - 'v*'  # 推送 tag 时也触发
+      - 'v*'  # 只在推送 tag 时触发
   workflow_dispatch:  # 允许手动触发
 
 jobs:
