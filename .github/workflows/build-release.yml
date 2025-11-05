@@ -42,19 +42,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
+        env:
+          PIP_NO_INPUT: 1
       
       - name: Build with PyInstaller
         run: python build_exe.py
       
-      - name: Rename artifact (non-Windows)
-        if: runner.os != 'Windows'
-        run: mv dist/RepoFlow dist/${{ matrix.build_name }}
+      - name: Check built files
+        run: ls -la dist/
       
-      - name: Upload artifact
+      - name: Upload artifact (Windows)
+        if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: dist/${{ matrix.build_name }}
+          path: dist/RepoFlow.exe
+      
+      - name: Upload artifact (non-Windows)
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/RepoFlow
   
   release:
     needs: build
