@@ -98,23 +98,39 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release
+          
           # Windows
-          find . -name "RepoFlow.exe" -exec cp {} release/RepoFlow-Windows.exe \;
+          if [ -f "RepoFlow-Windows.exe/RepoFlow.exe" ]; then
+            cp RepoFlow-Windows.exe/RepoFlow.exe release/RepoFlow-Windows.exe
+            echo "✓ Windows file prepared"
+          fi
+          
           # macOS (.app 打包成 zip)
           if [ -d "RepoFlow-macOS/RepoFlow.app" ]; then
-            cd RepoFlow-macOS && zip -r ../release/RepoFlow-macOS.zip RepoFlow.app && cd ..
+            (cd RepoFlow-macOS && zip -r ../release/RepoFlow-macOS.zip RepoFlow.app)
+            echo "✓ macOS .app zipped"
+          elif [ -f "RepoFlow-macOS/RepoFlow" ]; then
+            # 如果是单文件，直接复制并添加执行脚本说明
+            cp RepoFlow-macOS/RepoFlow release/RepoFlow-macOS
+            chmod +x release/RepoFlow-macOS
+            echo "✓ macOS file prepared (single file)"
           fi
+          
           # Linux
-          find . -name "RepoFlow" -type f -exec cp {} release/RepoFlow-Linux \;
+          if [ -f "RepoFlow-Linux/RepoFlow" ]; then
+            cp RepoFlow-Linux/RepoFlow release/RepoFlow-Linux
+            chmod +x release/RepoFlow-Linux
+            echo "✓ Linux file prepared"
+          fi
+          
+          echo "Release files:"
           ls -la release/
       
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            release/RepoFlow-Windows.exe
-            release/RepoFlow-macOS.zip
-            release/RepoFlow-Linux
+          files: release/*
+          fail_on_unmatched_files: false
           body: |
             ## RepoFlow ${{ github.ref_name }}
             
