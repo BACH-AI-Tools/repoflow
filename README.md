@@ -19,16 +19,25 @@
 
 ## 🚀 快速开始
 
-### 1. 安装
+### 方式 1：运行打包的 EXE（推荐，无需 Python）
 
+**下载并运行：**
+```
+1. 下载 RepoFlow.exe
+2. 双击运行
+3. 完成！
+```
+
+### 方式 2：从源码运行（开发者）
+
+#### 安装
 ```bash
 git clone https://github.com/BACH-AI-Tools/RepoFlow.git
 cd RepoFlow
 pip install -r requirements.txt
 ```
 
-### 2. 启动 GUI
-
+#### 启动 GUI
 **Windows:**
 ```powershell
 .\run-repoflow-gui.bat
@@ -37,6 +46,15 @@ pip install -r requirements.txt
 **Linux/Mac:**
 ```bash
 ./run-repoflow-gui.sh
+```
+
+#### 打包成 EXE
+```powershell
+# 运行打包脚本
+.\build-exe.bat
+
+# 生成的文件在
+dist\RepoFlow.exe
 ```
 
 ### 3. 配置 GitHub Token
@@ -268,6 +286,76 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 - [PyPI 发布指南](https://packaging.python.org/tutorials/packaging-projects/)
 - [NPM 发布指南](https://docs.npmjs.com/packages-and-modules/contributing-packages-to-the-registry)
 - [语义化版本规范](https://semver.org/lang/zh-CN/)
+
+---
+
+---
+
+## 📦 打包成可执行文件
+
+### 快速打包
+
+**Windows:**
+```powershell
+# 双击运行
+build-exe.bat
+
+# 或使用 PowerShell
+.\build-exe.ps1
+```
+
+**macOS/Linux:**
+```bash
+# 运行构建脚本
+./build-exe.sh
+```
+
+**生成的文件：**
+- Windows: `dist/RepoFlow.exe` (~20 MB)
+- macOS: `dist/RepoFlow` (~25 MB)
+- Linux: `dist/RepoFlow` (~25 MB)
+
+**特点：**
+- ✅ 独立可执行文件
+- ✅ 无需 Python 环境
+- ✅ 包含所有依赖
+
+### 自动构建（GitHub Actions）
+
+每次推送 tag 时自动构建三个平台的版本：
+
+```bash
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin v1.0.0
+```
+
+GitHub Actions 会自动：
+1. ✅ 构建 Windows/macOS/Linux 版本
+2. ✅ 创建 GitHub Release
+3. ✅ 上传所有平台的可执行文件
+
+**下载地址：**
+```
+https://github.com/BACH-AI-Tools/RepoFlow/releases
+```
+
+### 分发给用户
+
+只需要把对应平台的文件给用户：
+
+**Windows:**
+- 发送 `RepoFlow.exe`
+- 用户双击运行
+
+**macOS/Linux:**
+- 发送 `RepoFlow`
+- 用户运行：
+  ```bash
+  chmod +x RepoFlow
+  ./RepoFlow
+  ```
+
+**就这么简单！** 🎉
 
 ---
 

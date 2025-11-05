@@ -43,3 +43,8 @@ config.local.json
 # Logs
 *.log
 
+# PyInstaller
+*.spec
+*.exe
+*.dll
+

@@ -14,9 +14,10 @@ import os
 # 设置 UTF-8 编码（Windows 兼容）
 if sys.platform == 'win32':
     import locale
-    if sys.stdout.encoding != 'utf-8':
+    # PyInstaller 打包后 stdout/stderr 可能是 None
+    if sys.stdout and hasattr(sys.stdout, 'encoding') and sys.stdout.encoding != 'utf-8':
         sys.stdout.reconfigure(encoding='utf-8')
-    if sys.stderr.encoding != 'utf-8':
+    if sys.stderr and hasattr(sys.stderr, 'encoding') and sys.stderr.encoding != 'utf-8':
         sys.stderr.reconfigure(encoding='utf-8')
 
 from src.github_manager import GitHubManager
