@@ -1,54 +1,80 @@
-# RepoFlow 🚀
+# 🏭 MCP工厂
 
-> 自动化项目发布工具 - 一键发布到 GitHub + 自动发布到 PyPI/NPM
+> **一键自动化MCP发布平台** - 从本地项目到完整测试报告，3分钟搞定
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
 ---
 
-## ✨ 核心功能
+## 🎯 核心功能
 
-- 🎨 **可视化 GUI** - 极简界面，无需命令行
-- 🔐 **安全检查** - 自动扫描敏感信息（API Key、密码等）
-- 📦 **自动发布** - 支持 PyPI、NPM、Docker Hub
-- 🏷️ **自动 Tag** - 自动创建版本 Tag 触发 GitHub Actions
-- 🔄 **智能检测** - 自动识别项目类型和版本号
+### 🏭 一键生产线
+选择项目文件夹 → 点击开始 → 3分钟后完成
+
+### ✨ 自动完成
+- ✅ **扫描项目** - 检测敏感信息
+- ✅ **GitHub发布** - 创建仓库、推送代码
+- ✅ **PyPI/NPM发布** - 自动触发CI/CD
+- ✅ **EMCP注册** - 发布到EMCP平台
+- ✅ **MCP测试** - 测试所有工具
+- ✅ **Agent测试** - 创建Agent并测试
+- ✅ **对话测试** - SignalR自动化对话测试
+- ✅ **生成报告** - HTML报告 + CDN链接
+
+### 🎨 流程可视化
+- 📊 树状步骤展示
+- 🎯 实时进度更新
+- 📋 详细日志输出
+- ⚠️ 智能错误处理
 
 ---
 
 ## 🚀 快速开始
 
-### 方式 1：运行打包的 EXE（推荐，无需 Python）
+### 📦 安装依赖
 
-**下载并运行：**
-```
-1. 下载 RepoFlow.exe
-2. 双击运行
-3. 完成！
-```
-
-### 方式 2：从源码运行（开发者）
-
-#### 安装
 ```bash
+# 克隆项目
 git clone https://github.com/BACH-AI-Tools/RepoFlow.git
 cd RepoFlow
+
+# 安装依赖
 pip install -r requirements.txt
 ```
 
-#### 启动 GUI
-**Windows:**
-```powershell
-.\run-repoflow-gui.bat
-```
+---
 
-**Linux/Mac:**
 ```bash
-./run-repoflow-gui.sh
+# Windows
+.\run-mcp-factory.bat
+
+# Linux/Mac  
+./run-mcp-factory.sh
+
+# 或直接运行
+python mcp_factory_gui.py
 ```
 
-#### 打包成 EXE
+### 首次使用配置
+
+1. **点击 ⚙️ 设置**
+2. **配置必要信息**：
+   - GitHub Token
+   - EMCP账号（手机号，验证码自动生成）
+   - Azure OpenAI（可选）
+3. **保存配置**
+
+### 日常使用
+
+1. 选择项目文件夹（自动检测信息）
+2. 点击"🏭 开始生产"
+3. 等待3-5分钟
+4. 完成！
+
+---
+
+## 📦 打包成 EXE
 ```powershell
 # 方法 1: 运行打包脚本（推荐）
 .\build-exe.bat
@@ -192,20 +218,26 @@ python repoflow.py --help
 
 ---
 
-## 📁 项目结构
+## 📁 核心文件
 
 ```
-RepoFlow/
-├── repoflow_gui.py         # GUI 主程序
-├── repoflow.py             # CLI 主程序
-├── src/                    # 核心模块
-│   ├── github_manager.py   # GitHub API
-│   ├── git_manager.py      # Git 操作
-│   ├── pipeline_generator.py # CI/CD 生成
-│   ├── secret_scanner.py   # 敏感信息扫描
-│   └── ...
-├── requirements.txt        # Python 依赖
-└── README.md              # 本文档
+MCP工厂/
+├── mcp_factory_gui.py ⭐          # 主程序
+├── settings_window.py            # 设置窗口
+├── repoflow.py                   # CLI版本
+├── run-mcp-factory.bat          # 启动脚本
+├── src/                          # 核心模块
+│   ├── workflow_executor.py     # 工作流执行器
+│   ├── unified_config_manager.py # 配置管理
+│   ├── github_manager.py        # GitHub管理
+│   ├── git_manager.py           # Git操作
+│   ├── emcp_manager.py          # EMCP管理
+│   ├── mcp_tester.py            # MCP测试
+│   ├── agent_tester.py          # Agent测试
+│   ├── signalr_chat_tester.py   # 对话测试
+│   └── ... 更多模块
+├── requirements.txt             # 依赖
+└── README.md                    # 本文档
 ```
 
 ---
@@ -362,4 +394,65 @@ https://github.com/BACH-AI-Tools/RepoFlow/releases
 
 ---
 
-**Made with ❤️ by BACH Studio**
+## 📚 配置
+
+- 配置文件模板: `config_template.json`
+- 配置文件位置: `~/.repoflow/config.json`
+- 技术文档: `docs/emcpflow/`
+
+---
+
+## 🔗 相关平台
+
+### RepoFlow
+- [GitHub](https://github.com)
+- [PyPI](https://pypi.org)
+- [NPM](https://www.npmjs.com)
+- [Docker Hub](https://hub.docker.com)
+
+### EMCPFlow
+- [EMCP 平台（测试）](https://sit-emcp.kaleido.guru)
+- [EMCP 平台（正式）](https://emcp.kaleido.guru)
+- [Agent 平台](https://v5.kaleido.guru)
+- [即梦 AI](https://jimeng.jianying.com/)
+
+---
+
+## 🤝 贡献指南
+
+欢迎提交 Issue 和 Pull Request！
+
+### 开发环境设置
+```bash
+# 克隆项目
+git clone https://github.com/BACH-AI-Tools/RepoFlow.git
+cd RepoFlow
+
+# 创建虚拟环境（推荐）
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# 或
+.\venv\Scripts\activate  # Windows
+
+# 安装开发依赖
+pip install -r requirements.txt
+```
+
+### 代码结构
+- `src/` - 核心模块（请保持模块化和可测试性）
+- `tests/` - 测试文件（请为新功能添加测试）
+- `docs/` - 文档（请更新相关文档）
+
+---
+
+## 🎉 更新日志
+
+### v3.0.0 - MCP工厂（2025-11-07）
+- ✅ 完整的自动化流程（GitHub → EMCP → 测试）
+- ✅ 流程化步骤展示
+- ✅ 详细日志输出
+- ✅ 真实执行所有功能
+
+---
+
+**Made with ❤️ by BACH Studio (巴赫工作室)**

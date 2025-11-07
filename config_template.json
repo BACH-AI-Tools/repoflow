@@ -1,0 +1,58 @@
+{
+  "_comment": "RepoFlow 统一配置文件模板",
+  "_version": "2.0.0",
+  
+  "github": {
+    "token": "ghp_YOUR_GITHUB_TOKEN_HERE",
+    "org_name": "BACH-AI-Tools"
+  },
+  
+  "emcp": {
+    "base_url": "https://sit-emcp.kaleido.guru",
+    "phone_number": "17610785055",
+    "validation_code": "",
+    "_note": "验证码会自动生成，无需手动填写"
+  },
+  
+  "agent": {
+    "base_url": "https://v5.kaleido.guru",
+    "phone_number": "17610785055",
+    "validation_code": "",
+    "_note": "验证码会自动生成，无需手动填写"
+  },
+  
+  "azure_openai": {
+    "endpoint": "https://your-resource.openai.azure.com",
+    "api_key": "YOUR_API_KEY_HERE",
+    "api_version": "2024-02-15-preview",
+    "deployment_name": "gpt-4o"
+  },
+  
+  "jimeng": {
+    "enabled": true,
+    "mcp_url": "sse+https://jm-mcp.kaleido.guru/sse"
+  },
+  
+  "edgeone": {
+    "enabled": true,
+    "api_url": "https://mcp-on-edge.edgeone.app/kv/set"
+  },
+  
+  "pypi": {
+    "mirror_url": "https://pypi.tuna.tsinghua.edu.cn/simple"
+  },
+  
+  "other": {
+    "auto_publish": true,
+    "private_repo": false,
+    "default_version": "1.0.0"
+  },
+  
+  "session": {
+    "emcp_session_key": "",
+    "emcp_user_info": {},
+    "agent_session_key": "",
+    "agent_user_info": {}
+  }
+}
+

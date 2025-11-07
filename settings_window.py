@@ -1,0 +1,441 @@
+#!/usr/bin/env python3
+"""
+统一设置窗口
+管理所有平台和服务的配置
+"""
+
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+from src.unified_config_manager import UnifiedConfigManager
+from datetime import datetime
+
+
+class SettingsWindow:
+    """统一设置窗口"""
+    
+    def __init__(self, parent):
+        self.parent = parent
+        self.config_mgr = UnifiedConfigManager()
+        
+        # 创建窗口
+        self.window = tk.Toplevel(parent)
+        self.window.title("⚙️ 设置")
+        self.window.geometry("700x800")
+        self.window.resizable(False, False)
+        
+        # 使窗口置顶
+        self.window.transient(parent)
+        self.window.grab_set()
+        
+        # 创建UI
+        self.create_widgets()
+        
+        # 加载配置
+        self.load_config()
+        
+        # 居中显示
+        self.center_window()
+    
+    def center_window(self):
+        """窗口居中"""
+        self.window.update_idletasks()
+        width = self.window.winfo_width()
+        height = self.window.winfo_height()
+        x = (self.window.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.window.winfo_screenheight() // 2) - (height // 2)
+        self.window.geometry(f'{width}x{height}+{x}+{y}')
+    
+    def create_widgets(self):
+        """创建界面组件"""
+        # 主容器
+        main_frame = ttk.Frame(self.window, padding=15)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 创建带滚动条的 Canvas
+        canvas = tk.Canvas(main_frame, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # ===== 1. GitHub 配置 =====
+        github_frame = ttk.LabelFrame(scrollable_frame, text="🔗 GitHub 配置", padding=10)
+        github_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(github_frame, text="GitHub Token:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.github_token_var = tk.StringVar()
+        token_entry = ttk.Entry(github_frame, textvariable=self.github_token_var, width=50, show="*")
+        token_entry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
+        
+        ttk.Button(github_frame, text="🔗 获取 Token", 
+                   command=self.open_github_token_url).grid(row=0, column=2, padx=5)
+        
+        ttk.Label(github_frame, text="组织名称:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.github_org_var = tk.StringVar()
+        ttk.Entry(github_frame, textvariable=self.github_org_var, width=50).grid(
+            row=1, column=1, sticky=tk.EW, padx=5, pady=5)
+        
+        github_frame.columnconfigure(1, weight=1)
+        
+        # ===== 2. EMCP 平台配置 =====
+        emcp_frame = ttk.LabelFrame(scrollable_frame, text="🌐 EMCP 平台配置", padding=10)
+        emcp_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(emcp_frame, text="平台域名:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.emcp_url_var = tk.StringVar()
+        emcp_url_combo = ttk.Combobox(emcp_frame, textvariable=self.emcp_url_var, width=47, 
+                                      values=["https://sit-emcp.kaleido.guru", "https://emcp.kaleido.guru"])
+        emcp_url_combo.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
+        
+        ttk.Label(emcp_frame, text="手机号:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.emcp_phone_var = tk.StringVar()
+        ttk.Entry(emcp_frame, textvariable=self.emcp_phone_var, width=50).grid(
+            row=1, column=1, sticky=tk.EW, padx=5, pady=5)
+        
+        ttk.Label(emcp_frame, text="验证码:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        self.emcp_code_var = tk.StringVar()
+        code_frame = ttk.Frame(emcp_frame)
+        code_frame.grid(row=2, column=1, sticky=tk.EW, padx=5, pady=5)
+        
+        # 验证码自动生成，只读显示
+        code_entry = ttk.Entry(code_frame, textvariable=self.emcp_code_var, width=30, state='readonly')
+        code_entry.pack(side=tk.LEFT)
+        ttk.Label(code_frame, text="(自动生成)", foreground="green").pack(side=tk.LEFT, padx=10)
+        
+        # 自动生成今日验证码
+        self.emcp_code_var.set(datetime.now().strftime("%m%Y%d"))
+        
+        emcp_frame.columnconfigure(1, weight=1)
+        
+        # ===== 3. Agent 平台配置 =====
+        agent_frame = ttk.LabelFrame(scrollable_frame, text="🤖 Agent 平台配置", padding=10)
+        agent_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(agent_frame, text="平台域名:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.agent_url_var = tk.StringVar()
+        agent_url_combo = ttk.Combobox(agent_frame, textvariable=self.agent_url_var, width=47,
+                                       values=["https://v5.kaleido.guru", "https://v5-sit.kaleido.guru"])
+        agent_url_combo.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
+        
+        ttk.Label(agent_frame, text="手机号:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.agent_phone_var = tk.StringVar()
+        ttk.Entry(agent_frame, textvariable=self.agent_phone_var, width=50).grid(
+            row=1, column=1, sticky=tk.EW, padx=5, pady=5)
+        
+        ttk.Label(agent_frame, text="验证码:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        self.agent_code_var = tk.StringVar()
+        agent_code_frame = ttk.Frame(agent_frame)
+        agent_code_frame.grid(row=2, column=1, sticky=tk.EW, padx=5, pady=5)
+        
+        # 验证码自动生成，只读显示
+        agent_code_entry = ttk.Entry(agent_code_frame, textvariable=self.agent_code_var, width=30, state='readonly')
+        agent_code_entry.pack(side=tk.LEFT)
+        ttk.Label(agent_code_frame, text="(自动生成)", foreground="green").pack(side=tk.LEFT, padx=10)
+        
+        # 自动生成今日验证码
+        self.agent_code_var.set(datetime.now().strftime("%m%Y%d"))
+        
+        # 使用相同验证码复选框
+        self.same_code_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(agent_frame, text="与 EMCP 使用相同手机号和验证码", 
+                       variable=self.same_code_var,
+                       command=self.on_same_code_changed).grid(row=3, column=1, sticky=tk.W, padx=5, pady=5)
+        
+        # 监听手机号变化，自动同步
+        self.emcp_phone_var.trace('w', self.auto_sync_code)
+        
+        agent_frame.columnconfigure(1, weight=1)
+        
+        # ===== 4. Azure OpenAI 配置 =====
+        openai_frame = ttk.LabelFrame(scrollable_frame, text="🤖 Azure OpenAI 配置", padding=10)
+        openai_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(openai_frame, text="Endpoint:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.openai_endpoint_var = tk.StringVar()
+        ttk.Entry(openai_frame, textvariable=self.openai_endpoint_var, width=50).grid(
+            row=0, column=1, sticky=tk.EW, padx=5, pady=5)
+        
+        ttk.Label(openai_frame, text="API Key:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.openai_key_var = tk.StringVar()
+        ttk.Entry(openai_frame, textvariable=self.openai_key_var, width=50, show="*").grid(
+            row=1, column=1, sticky=tk.EW, padx=5, pady=5)
+        
+        ttk.Label(openai_frame, text="API Version:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        self.openai_version_var = tk.StringVar()
+        version_combo = ttk.Combobox(openai_frame, textvariable=self.openai_version_var, width=47,
+                                     values=["2024-02-15-preview", "2023-12-01-preview", "2023-05-15"])
+        version_combo.grid(row=2, column=1, sticky=tk.EW, padx=5, pady=5)
+        
+        ttk.Label(openai_frame, text="Deployment:").grid(row=3, column=0, sticky=tk.W, pady=5)
+        self.openai_deployment_var = tk.StringVar()
+        deployment_combo = ttk.Combobox(openai_frame, textvariable=self.openai_deployment_var, width=47,
+                                       values=["gpt-4o", "gpt-4", "gpt-35-turbo"])
+        deployment_combo.grid(row=3, column=1, sticky=tk.EW, padx=5, pady=5)
+        
+        openai_frame.columnconfigure(1, weight=1)
+        
+        # ===== 5. PyPI 配置 =====
+        pypi_frame = ttk.LabelFrame(scrollable_frame, text="📦 PyPI 配置", padding=10)
+        pypi_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(pypi_frame, text="镜像源:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.pypi_mirror_var = tk.StringVar()
+        mirror_combo = ttk.Combobox(pypi_frame, textvariable=self.pypi_mirror_var, width=47,
+                                    values=[
+                                        "https://pypi.tuna.tsinghua.edu.cn/simple",
+                                        "https://mirrors.aliyun.com/pypi/simple",
+                                        "https://pypi.mirrors.ustc.edu.cn/simple",
+                                        "https://pypi.org/simple"
+                                    ])
+        mirror_combo.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
+        
+        pypi_frame.columnconfigure(1, weight=1)
+        
+        # ===== 6. 高级选项 =====
+        advanced_frame = ttk.LabelFrame(scrollable_frame, text="⚙️ 高级选项", padding=10)
+        advanced_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.jimeng_enabled_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(advanced_frame, text="启用即梦 AI Logo 生成", 
+                       variable=self.jimeng_enabled_var).pack(anchor=tk.W, pady=2)
+        
+        self.edgeone_enabled_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(advanced_frame, text="启用 EdgeOne Pages 报告分享", 
+                       variable=self.edgeone_enabled_var).pack(anchor=tk.W, pady=2)
+        
+        self.auto_publish_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(advanced_frame, text="默认自动发布到包管理平台", 
+                       variable=self.auto_publish_var).pack(anchor=tk.W, pady=2)
+        
+        self.private_repo_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(advanced_frame, text="默认创建私有仓库", 
+                       variable=self.private_repo_var).pack(anchor=tk.W, pady=2)
+        
+        # ===== 按钮区域 =====
+        button_frame = ttk.Frame(scrollable_frame)
+        button_frame.pack(fill=tk.X, pady=10)
+        
+        # 左侧按钮
+        left_buttons = ttk.Frame(button_frame)
+        left_buttons.pack(side=tk.LEFT)
+        
+        ttk.Button(left_buttons, text="📥 导入配置", 
+                   command=self.import_config, width=15).pack(side=tk.LEFT, padx=2)
+        ttk.Button(left_buttons, text="📤 导出配置", 
+                   command=self.export_config, width=15).pack(side=tk.LEFT, padx=2)
+        ttk.Button(left_buttons, text="📁 打开配置文件夹", 
+                   command=self.open_config_folder, width=18).pack(side=tk.LEFT, padx=2)
+        
+        # 右侧按钮
+        right_buttons = ttk.Frame(button_frame)
+        right_buttons.pack(side=tk.RIGHT)
+        
+        ttk.Button(right_buttons, text="💾 保存", 
+                   command=self.save_config, width=12,
+                   style='Accent.TButton').pack(side=tk.LEFT, padx=2)
+        ttk.Button(right_buttons, text="❌ 取消", 
+                   command=self.window.destroy, width=12).pack(side=tk.LEFT, padx=2)
+        
+        # 打包滚动区域
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # 绑定鼠标滚轮（绑定到 canvas 而不是 bind_all）
+        def _on_mousewheel(event):
+            try:
+                canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            except:
+                pass  # 窗口已关闭时忽略错误
+        
+        canvas.bind("<MouseWheel>", _on_mousewheel)
+        
+        # 当窗口关闭时解绑
+        def _on_destroy(event=None):
+            try:
+                canvas.unbind("<MouseWheel>")
+            except:
+                pass
+        
+        self.window.protocol("WM_DELETE_WINDOW", lambda: (_on_destroy(), self.window.destroy()))
+    
+    def load_config(self):
+        """加载配置"""
+        config = self.config_mgr.load_config()
+        
+        # 自动生成今日验证码
+        today_code = datetime.now().strftime("%m%Y%d")
+        
+        # GitHub
+        self.github_token_var.set(config.get("github", {}).get("token", ""))
+        self.github_org_var.set(config.get("github", {}).get("org_name", "BACH-AI-Tools"))
+        
+        # EMCP
+        emcp_config = config.get("emcp", {})
+        self.emcp_url_var.set(emcp_config.get("base_url", "https://sit-emcp.kaleido.guru"))
+        self.emcp_phone_var.set(emcp_config.get("phone_number", ""))
+        # 始终使用自动生成的验证码
+        self.emcp_code_var.set(today_code)
+        
+        # Agent
+        agent_config = config.get("agent", {})
+        self.agent_url_var.set(agent_config.get("base_url", "https://v5.kaleido.guru"))
+        self.agent_phone_var.set(agent_config.get("phone_number", ""))
+        # 始终使用自动生成的验证码
+        self.agent_code_var.set(today_code)
+        
+        # Azure OpenAI
+        openai_config = config.get("azure_openai", {})
+        self.openai_endpoint_var.set(openai_config.get("endpoint", ""))
+        self.openai_key_var.set(openai_config.get("api_key", ""))
+        self.openai_version_var.set(openai_config.get("api_version", "2024-02-15-preview"))
+        self.openai_deployment_var.set(openai_config.get("deployment_name", "gpt-4o"))
+        
+        # PyPI
+        self.pypi_mirror_var.set(config.get("pypi", {}).get("mirror_url", "https://pypi.tuna.tsinghua.edu.cn/simple"))
+        
+        # 高级选项
+        self.jimeng_enabled_var.set(config.get("jimeng", {}).get("enabled", True))
+        self.edgeone_enabled_var.set(config.get("edgeone", {}).get("enabled", True))
+        self.auto_publish_var.set(config.get("other", {}).get("auto_publish", True))
+        self.private_repo_var.set(config.get("other", {}).get("private_repo", False))
+    
+    def save_config(self):
+        """保存配置"""
+        config = self.config_mgr.load_config()
+        
+        # 自动生成最新的验证码
+        today_code = datetime.now().strftime("%m%Y%d")
+        
+        # GitHub
+        config["github"] = {
+            "token": self.github_token_var.get().strip(),
+            "org_name": self.github_org_var.get().strip()
+        }
+        
+        # EMCP - 使用自动生成的验证码
+        config["emcp"] = {
+            "base_url": self.emcp_url_var.get().strip(),
+            "phone_number": self.emcp_phone_var.get().strip(),
+            "validation_code": today_code  # 自动生成
+        }
+        
+        # Agent - 使用自动生成的验证码
+        config["agent"] = {
+            "base_url": self.agent_url_var.get().strip(),
+            "phone_number": self.agent_phone_var.get().strip(),
+            "validation_code": today_code  # 自动生成
+        }
+        
+        # Azure OpenAI
+        config["azure_openai"] = {
+            "endpoint": self.openai_endpoint_var.get().strip(),
+            "api_key": self.openai_key_var.get().strip(),
+            "api_version": self.openai_version_var.get().strip(),
+            "deployment_name": self.openai_deployment_var.get().strip()
+        }
+        
+        # PyPI
+        if "pypi" not in config:
+            config["pypi"] = {}
+        config["pypi"]["mirror_url"] = self.pypi_mirror_var.get().strip()
+        
+        # 高级选项
+        if "jimeng" not in config:
+            config["jimeng"] = {}
+        config["jimeng"]["enabled"] = self.jimeng_enabled_var.get()
+        
+        if "edgeone" not in config:
+            config["edgeone"] = {}
+        config["edgeone"]["enabled"] = self.edgeone_enabled_var.get()
+        
+        if "other" not in config:
+            config["other"] = {}
+        config["other"]["auto_publish"] = self.auto_publish_var.get()
+        config["other"]["private_repo"] = self.private_repo_var.get()
+        
+        # 保存
+        if self.config_mgr.save_config(config):
+            messagebox.showinfo("成功", "配置已保存！", parent=self.window)
+            self.window.destroy()
+        else:
+            messagebox.showerror("错误", "保存配置失败！", parent=self.window)
+    
+    def import_config(self):
+        """导入配置"""
+        file_path = filedialog.askopenfilename(
+            parent=self.window,
+            title="选择配置文件",
+            filetypes=[("JSON 文件", "*.json"), ("所有文件", "*.*")]
+        )
+        
+        if file_path:
+            if self.config_mgr.import_config(file_path):
+                messagebox.showinfo("成功", "配置已导入！", parent=self.window)
+                self.load_config()  # 重新加载显示
+            else:
+                messagebox.showerror("错误", "导入配置失败！", parent=self.window)
+    
+    def export_config(self):
+        """导出配置"""
+        file_path = filedialog.asksaveasfilename(
+            parent=self.window,
+            title="保存配置文件",
+            defaultextension=".json",
+            filetypes=[("JSON 文件", "*.json"), ("所有文件", "*.*")]
+        )
+        
+        if file_path:
+            if self.config_mgr.export_config(file_path):
+                messagebox.showinfo("成功", f"配置已导出到:\n{file_path}", parent=self.window)
+            else:
+                messagebox.showerror("错误", "导出配置失败！", parent=self.window)
+    
+    def open_config_folder(self):
+        """打开配置文件夹"""
+        import os
+        import subprocess
+        config_dir = self.config_mgr.config_dir
+        
+        if os.path.exists(config_dir):
+            if sys.platform == 'win32':
+                os.startfile(config_dir)
+            elif sys.platform == 'darwin':
+                subprocess.Popen(['open', config_dir])
+            else:
+                subprocess.Popen(['xdg-open', config_dir])
+        else:
+            messagebox.showwarning("提示", "配置文件夹不存在", parent=self.window)
+    
+    def open_github_token_url(self):
+        """打开 GitHub Token 获取页面"""
+        import webbrowser
+        webbrowser.open("https://github.com/settings/tokens/new?scopes=repo,workflow,admin:org")
+    
+    def auto_sync_code(self, *args):
+        """自动同步验证码"""
+        if self.same_code_var.get():
+            self.agent_phone_var.set(self.emcp_phone_var.get())
+            self.agent_code_var.set(self.emcp_code_var.get())
+    
+    def on_same_code_changed(self):
+        """相同验证码复选框变化"""
+        if self.same_code_var.get():
+            # 同步手机号和验证码
+            self.agent_phone_var.set(self.emcp_phone_var.get())
+            self.agent_code_var.set(self.emcp_code_var.get())
+
+
+if __name__ == "__main__":
+    import sys
+    # 测试设置窗口
+    root = tk.Tk()
+    root.withdraw()
+    SettingsWindow(root)
+    root.mainloop()
+
