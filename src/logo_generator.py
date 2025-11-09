@@ -81,14 +81,22 @@ class LogoGenerator:
                 return emcp_logo
         
         # 2. 优先使用即梦MCP生成 ✅ 已启用
-        if use_jimeng and self.jimeng_client:
-            try:
-                LogoLogger.log(f"   🎨 使用即梦MCP生成Logo...")
-                jimeng_logo = self._generate_logo_with_jimeng(package_info)
-                if jimeng_logo:
-                    return jimeng_logo  # 已经是EMCP URL
-            except Exception as e:
-                LogoLogger.log(f"   ⚠️ 即梦MCP生成失败: {e}")
+        if use_jimeng:
+            if not self.jimeng_client:
+                LogoLogger.log(f"   ⚠️ 即梦MCP客户端未初始化（可能在设置中被禁用）")
+            else:
+                try:
+                    LogoLogger.log(f"   🎨 使用即梦MCP生成Logo...")
+                    jimeng_logo = self._generate_logo_with_jimeng(package_info)
+                    if jimeng_logo:
+                        LogoLogger.log(f"   ✅ 即梦MCP生成成功")
+                        return jimeng_logo  # 已经是EMCP URL
+                    else:
+                        LogoLogger.log(f"   ⚠️ 即梦MCP返回空结果")
+                except Exception as e:
+                    LogoLogger.log(f"   ❌ 即梦MCP生成失败: {e}")
+                    import traceback
+                    LogoLogger.log(f"   详细错误: {traceback.format_exc()}")
         
         # 3. 如果配置了 DALL-E
         if generate_with_ai and self.openai_client:
@@ -119,12 +127,21 @@ class LogoGenerator:
             package_name = package_info.get('package_name', '')
             package_type = package_info.get('type', 'unknown')
             
-            # 获取描述
-            description = (
-                info.get('summary') or 
-                info.get('description', '')[:150] or 
-                f"{package_name} package"
-            )
+            # 获取描述（优先使用完整 README）
+            readme = info.get('readme', info.get('description', ''))
+            summary = info.get('summary', '')
+            
+            # 构建详细的描述用于 Logo 生成
+            if readme and len(readme) > 100:
+                # 使用 README 的前500字符（更详细）
+                description = readme[:500]
+            elif summary:
+                description = summary
+            else:
+                description = f"{package_name} package"
+            
+            LogoLogger.log(f"   📋 使用描述: {description[:100]}...")
+            LogoLogger.log(f"   📄 描述来源: {'README' if readme else 'summary'}")
             
             # 根据包类型选择设计元素
             type_elements = {
@@ -153,10 +170,12 @@ class LogoGenerator:
             LogoLogger.log(f"   📝 提示词: {prompt[:80]}...")
             
             # 调用即梦MCP生成图片（不上传，因为需要token）
+            # 传入降级描述，即使包不存在也可以生成
             result = self.jimeng_client.generate_logo_from_package(
                 package_url=package_name,
                 emcp_base_url=self.emcp_base_url,
-                use_v40=True
+                use_v40=True,
+                fallback_description=description  # 降级描述
             )
             
             if result and result.get('success'):
@@ -372,9 +391,10 @@ Style requirements:
                     
                     try:
                         # 调用自动登录
-                        from config_manager import ConfigManager
-                        config_mgr = ConfigManager()
-                        creds = config_mgr.load_emcp_credentials()
+                        from src.unified_config_manager import UnifiedConfigManager
+                        config_mgr = UnifiedConfigManager()
+                        config = config_mgr.load_config()
+                        creds = config.get('emcp', {})
                         
                         if creds:
                             login_result = self.emcp_manager.login(

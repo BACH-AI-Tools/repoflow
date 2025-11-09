@@ -280,8 +280,23 @@ jobs:
         
         # 检查 package.json 是否存在，如果不存在则创建示例
         package_json = project_path / 'package.json'
-        if not package_json.exists():
-            # 自动添加 @bachai 作用域避免包名冲突
+        
+        # 检查并更新 package.json
+        if package_json.exists():
+            # 读取现有的 package.json
+            import json
+            try:
+                with open(package_json, 'r', encoding='utf-8') as f:
+                    package_data = json.load(f)
+                
+                # 不再自动添加 @bachai/ 作用域，保持用户原有的包名
+                current_name = package_data.get('name', '')
+                print(f"📝 保持原包名: {current_name}")
+                
+            except Exception as e:
+                print(f"⚠️ 读取 package.json 失败: {e}")
+        else:
+            # 创建新的 package.json（带 @bachai/ 作用域）
             package_name = f"@bachai/{project_path.name.lower()}"
             package_data = {
                 "name": package_name,
@@ -289,14 +304,15 @@ jobs:
                 "description": "",
                 "main": "index.js",
                 "scripts": {
-                    "test": "echo \"Error: no test specified\" && exit 0",
+                    "test": "echo \"No tests specified\" && exit 0",
                     "build": "echo \"No build step\""
                 },
                 "keywords": [],
                 "author": "BACH Studio",
                 "license": "MIT"
             }
-            package_json.write_text(json.dumps(package_data, indent=2), encoding='utf-8')
+            package_json.write_text(json.dumps(package_data, indent=2, ensure_ascii=False), encoding='utf-8')
+            print(f"📝 创建 package.json: {package_name}")
     
     def _generate_pypi_pipeline(self, project_path: Path):
         """生成 PyPI Pipeline (GitHub Actions)"""

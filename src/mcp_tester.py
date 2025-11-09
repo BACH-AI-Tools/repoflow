@@ -227,9 +227,12 @@ class MCPTester:
             
             MCPTesterLogger.log(f"   ✅ URL: {mcp_config['url']}")
             
-            # 等待服务启动
-            MCPTesterLogger.log("   ⏳ 等待服务启动 (10秒)...")
-            time.sleep(10)
+            # 步骤 4.5: 健康检查 - 等待服务启动并验证可访问
+            MCPTesterLogger.log("\n📋 步骤 4.5/6: 健康检查 - 等待服务启动...")
+            if not self._wait_for_server_ready(mcp_config, template_id, server_id):
+                raise Exception("MCP Server 启动失败或无法连接")
+            
+            MCPTesterLogger.log("   ✅ Server 已就绪")
             
             # 步骤 5: 测试所有工具
             MCPTesterLogger.log("\n📋 步骤 5/6: 测试所有 MCP 工具...")
@@ -396,6 +399,60 @@ class MCPTester:
         except Exception as e:
             MCPTesterLogger.log(f"   ❌ 请求失败: {e}")
             return None
+    
+    def _wait_for_server_ready(self, mcp_config: Dict, template_id: str, server_id: str, max_wait_seconds: int = 60) -> bool:
+        """
+        等待 MCP Server 启动并就绪
+        
+        Args:
+            mcp_config: MCP 连接配置
+            template_id: 模板 ID
+            server_id: Server ID
+            max_wait_seconds: 最大等待秒数
+        
+        Returns:
+            True 如果服务就绪，False 如果失败
+        """
+        MCPTesterLogger.log(f"   ⏳ 最多等待 {max_wait_seconds} 秒...")
+        
+        retry_count = 0
+        max_retries = max_wait_seconds // 5  # 每5秒重试一次
+        
+        while retry_count < max_retries:
+            retry_count += 1
+            wait_time = retry_count * 5
+            
+            MCPTesterLogger.log(f"   ⏳ 尝试连接 ({wait_time}/{max_wait_seconds}秒)...")
+            time.sleep(5)
+            
+            try:
+                # 尝试连接
+                client = MCPClient(mcp_config['url'], mcp_config.get('headers', {}))
+                client.start_sse_listener()
+                
+                if client.wait_for_session(timeout=10):
+                    MCPTesterLogger.log(f"   ✅ 连接成功!")
+                    client.stop()
+                    return True
+                else:
+                    MCPTesterLogger.log(f"   ⚠️ 连接超时，继续重试...")
+                    client.stop()
+            except Exception as e:
+                MCPTesterLogger.log(f"   ⚠️ 连接错误: {e}")
+        
+        # 所有重试都失败了
+        MCPTesterLogger.log(f"\n   ❌ Server 在 {max_wait_seconds} 秒内未能启动")
+        MCPTesterLogger.log(f"   💡 可能原因:")
+        MCPTesterLogger.log(f"      1. 包名错误或包不存在")
+        MCPTesterLogger.log(f"      2. npm/pypi 安装失败")
+        MCPTesterLogger.log(f"      3. 启动命令错误")
+        MCPTesterLogger.log(f"      4. 依赖安装失败")
+        MCPTesterLogger.log(f"\n   🔍 建议检查:")
+        MCPTesterLogger.log(f"      - 包是否已成功发布到 npm/pypi")
+        MCPTesterLogger.log(f"      - 包名是否正确（无 @scope/ 前缀，除非真的有）")
+        MCPTesterLogger.log(f"      - GitHub Actions 是否构建成功")
+        
+        return False
     
     def _test_all_tools(self, mcp_config: Dict) -> Dict:
         """测试所有 MCP 工具"""

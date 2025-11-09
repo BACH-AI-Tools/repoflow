@@ -37,7 +37,9 @@ class WorkflowExecutor:
         # 运行时数据
         self.github_repo_url = None
         self.package_name = None
+        self.package_type = None  # 添加 package_type 属性
         self.template_id = None
+        self.env_vars_config = []  # 环境变量配置
         
         # 管理器实例（复用）
         self.emcp_manager = None
@@ -135,6 +137,9 @@ class WorkflowExecutor:
         info = detector.detect()
         project_type = info.get("type", "unknown").lower()
         
+        # 保存项目类型
+        self.package_type = project_type
+        
         print(f"🔍 项目类型: {project_type}")
         
         # 创建生成器（不需要参数）
@@ -178,30 +183,114 @@ class WorkflowExecutor:
         print(f"✅ 步骤完成\n")
     
     def step_trigger_publish(self):
-        """触发发布（创建Tag）"""
+        """触发发布（创建Tag）并等待完成"""
         print(f"\n{'='*60}")
-        print(f"步骤: 触发发布")
+        print(f"步骤: 触发发布并等待完成")
         print(f"{'='*60}")
         
         print(f"🏷️ 检查版本标签: v{self.version}")
         
         git_mgr = GitManager(self.project_path, self.config.get("github", {}).get("token", ""))
         
+        tag_exists = False
         try:
             print(f"📤 推送标签到 GitHub...")
             git_mgr.create_and_push_tag(f"v{self.version}", f"Release v{self.version}")
             
             print(f"✅ 标签推送成功")
-            print(f"🚀 GitHub Actions 将自动触发发布")
+            print(f"🚀 GitHub Actions 已触发")
         except Exception as e:
             if "已经存在" in str(e) or "already exists" in str(e).lower():
                 print(f"ℹ️ 标签 v{self.version} 已存在")
                 print(f"ℹ️ GitHub Actions 可能已经运行过")
-                print(f"💡 提示: 如需重新发布，请修改版本号（如 1.0.1）")
+                tag_exists = True
             else:
                 raise
         
+        # 等待包发布
+        if not tag_exists:
+            print(f"\n⏳ 等待包发布到仓库...")
+            print(f"💡 GitHub Actions 通常需要 2-3 分钟")
+            print(f"📊 进度: https://github.com/{self.org_name}/{self.repo_name}/actions")
+            
+            import time
+            import requests
+            
+            max_wait = 180  # 最多等3分钟
+            check_interval = 15
+            elapsed = 0
+            package_found = False
+            
+            while elapsed < max_wait:
+                try:
+                    # 检查包是否已发布
+                    if self.package_type and self.package_type.lower() == 'node.js':
+                        url = f"https://registry.npmjs.org/{self.package_name}"
+                    else:
+                        url = f"https://pypi.org/pypi/{self.package_name}/json"
+                    
+                    response = requests.get(url, timeout=10)
+                    if response.status_code == 200:
+                        print(f"\n✅ 包已成功发布！")
+                        package_found = True
+                        break
+                    
+                    print(f"   ⏳ 等待中... ({elapsed}秒/{max_wait}秒)")
+                except:
+                    pass
+                
+                time.sleep(check_interval)
+                elapsed += check_interval
+            
+            if not package_found:
+                print(f"\n⚠️ 警告: 包在 {max_wait} 秒内未发布")
+                print(f"")
+                print(f"可能原因：")
+                print(f"  • GitHub Actions 执行失败（依赖缺失、构建错误等）")
+                print(f"  • 网络问题或发布时间较长")
+                print(f"")
+                print(f"请检查：")
+                print(f"  🔗 {f'https://github.com/{self.org_name}/{self.repo_name}/actions'}")
+                print(f"")
+                print(f"⛔ 停止后续流程")
+                print(f"💡 修复问题后，可以只运行 EMCP 发布部分")
+                raise Exception(f"包未发布，停止流程以避免无效操作")
+        
         print(f"✅ 步骤完成\n")
+    
+    def _generate_command_by_type(self) -> str:
+        """根据项目类型生成启动命令"""
+        if self.package_type and self.package_type.lower() == 'node.js':
+            return f"npx {self.package_name}"
+        else:
+            return f"uvx {self.package_name}"
+    
+    def _get_package_type_code(self) -> int:
+        """获取包类型代码"""
+        if self.package_type and self.package_type.lower() == 'node.js':
+            return 1  # NPM
+        else:
+            return 2  # PyPI
+    
+    def _generate_route_prefix(self) -> str:
+        """生成合法的路由前缀"""
+        import re
+        # 从包名提取，移除作用域前缀
+        name = self.package_name.split('/')[-1] if '/' in self.package_name else self.package_name
+        # 移除 bachai- 前缀
+        name = name.replace('bachai-', '').replace('bachai', '')
+        # 只保留字母和数字
+        name = re.sub(r'[^a-z0-9]', '', name.lower())
+        # 如果以数字开头，添加前缀
+        if name and name[0].isdigit():
+            name = 'mcp' + name
+        # 限制长度
+        if len(name) > 10:
+            name = name[:10]
+        # 如果为空，使用默认值
+        if not name:
+            name = 'mcp'
+        return name
     
     # ===== EMCP 发布流程 =====
     
@@ -211,15 +300,28 @@ class WorkflowExecutor:
         print(f"步骤: 获取包信息")
         print(f"{'='*60}")
         
-        # 从仓库名推断包名
-        if self.repo_name.startswith("bachai-"):
-            self.package_name = self.repo_name
+        # 从项目配置文件读取真实的包名，而不是自动添加前缀
+        if self.package_type and self.package_type.lower() == 'node.js':
+            # Node.js 项目从 package.json 读取包名
+            import json
+            package_json_path = Path(self.project_path) / 'package.json'
+            if package_json_path.exists():
+                try:
+                    with open(package_json_path, 'r', encoding='utf-8') as f:
+                        package_data = json.load(f)
+                        self.package_name = package_data.get('name', self.repo_name)
+                except Exception as e:
+                    print(f"⚠️ 读取 package.json 失败: {e}")
+                    self.package_name = self.repo_name
+            else:
+                self.package_name = self.repo_name
         else:
-            self.package_name = f"bachai-{self.repo_name}"
+            # Python 项目从 setup.py 或 pyproject.toml 读取包名
+            # 如果没有特殊前缀，使用仓库名
+            self.package_name = self.repo_name
         
-        print(f"📦 推断的包名: {self.package_name}")
-        print(f"ℹ️ 等待包发布到PyPI后才能获取完整信息")
-        print(f"ℹ️ 当前使用项目本地信息")
+        print(f"📦 包名: {self.package_name}")
+        print(f"🔧 项目类型: {self.package_type}")
         print(f"✅ 步骤完成\n")
     
     def step_ai_generate(self):
@@ -228,10 +330,45 @@ class WorkflowExecutor:
         print(f"步骤: AI 生成模板")
         print(f"{'='*60}")
         
+        # 检测环境变量配置需求
+        print(f"\n🔍 检测环境变量配置...")
+        from src.env_var_detector import EnvVarDetector
+        detector = EnvVarDetector()
+        env_vars = detector.detect_from_project(self.project_path)
+        
+        if env_vars:
+            print(f"   发现 {len(env_vars)} 个环境变量需要配置")
+            for var in env_vars:
+                required_text = "必需" if var['required'] else "可选"
+                print(f"   - {var['name']}: {var['description']} ({required_text})")
+            
+            # 弹出对话框让用户确认/修改
+            print(f"\n💡 请在弹出的对话框中填写环境变量说明...")
+            
+            from src.env_var_dialog import EnvVarDialog
+            import tkinter as tk
+            
+            # 找到主窗口
+            root = self.parent if hasattr(self, 'parent') else tk._default_root
+            
+            dialog = EnvVarDialog(root, env_vars, self.package_name)
+            configured_vars = dialog.show()
+            
+            if not configured_vars:
+                print(f"❌ 用户取消了环境变量配置")
+                raise Exception("必须配置环境变量才能发布到 EMCP")
+            
+            # 保存配置的环境变量
+            self.env_vars_config = configured_vars
+            print(f"✅ 用户已配置 {len(configured_vars)} 个环境变量")
+        else:
+            print(f"   ✅ 未检测到需要配置的环境变量")
+            self.env_vars_config = []
+        
         ai_config = self.config.get("azure_openai", {})
         
         if not ai_config.get("endpoint") or not ai_config.get("api_key"):
-            print(f"⚠️ 未配置 Azure OpenAI，使用基础生成器")
+            print(f"\n⚠️ 未配置 Azure OpenAI，使用基础生成器")
             # 使用简单的模板
             self.template_data = {
                 "name_zh_cn": self.package_name,
@@ -250,28 +387,58 @@ class WorkflowExecutor:
         print(f"🤖 正在调用 AI 生成描述...")
         
         try:
-            # 初始化EMCP管理器用于Logo上传认证
-            emcp_mgr = EMCPManager()
+            # 初始化并登录EMCP（用于Logo上传认证）
+            emcp_config = self.config.get("emcp", {})
+            if not self.emcp_manager:
+                self.emcp_manager = EMCPManager()
+                self.emcp_manager.base_url = emcp_config.get('base_url', 'https://sit-emcp.kaleido.guru')
+            
+            # 确保已登录（为了上传Logo）
+            if emcp_config.get("phone_number") and not self.emcp_manager.session_key:
+                print(f"🔐 登录 EMCP（为Logo上传准备）...")
+                try:
+                    user_info = self.emcp_manager.login(
+                        emcp_config['phone_number'],
+                        emcp_config['validation_code']
+                    )
+                    print(f"✅ EMCP 登录成功")
+                except Exception as e:
+                    print(f"⚠️ EMCP 登录失败: {e}")
+                    print(f"   Logo 将使用默认图片")
             
             ai_gen = AITemplateGenerator(
                 azure_endpoint=ai_config['endpoint'],
                 api_key=ai_config['api_key'],
                 api_version=ai_config.get('api_version', '2024-02-15-preview'),
                 deployment_name=ai_config['deployment_name'],
-                emcp_manager=emcp_mgr
+                emcp_manager=self.emcp_manager  # 使用已登录的实例
             )
             
-            # 使用包名生成
+            # 从本地项目读取完整信息
+            from src.project_detector import ProjectDetector
+            detector = ProjectDetector(self.project_path)
+            project_info = detector.detect()
+            
+            # 构建包信息（包含完整 README）
             package_info = {
-                "name": self.package_name,
-                "description": f"{self.package_name} - MCP Server"
+                "package_name": self.package_name,
+                "type": self.package_type,
+                "info": {
+                    "name": project_info.get('name', self.package_name),
+                    "version": project_info.get('version', '1.0.0'),
+                    "summary": project_info.get('description', f"{self.package_name} MCP Server"),
+                    "description": project_info.get('readme', ''),  # ✅ 完整 README
+                    "readme": project_info.get('readme', ''),  # ✅ 完整 README
+                    "author": "BACH Studio"
+                }
             }
             
+            print(f"📝 读取到的 README: {len(project_info.get('readme', ''))} 字符")
             print(f"📝 生成中文描述...")
             print(f"📝 生成繁体描述...")
             print(f"📝 生成英文描述...")
             
-            result = ai_gen.generate_template(package_info, "pypi")
+            result = ai_gen.generate_template_info(package_info, self.package_type)
             self.template_data = result
             
             print(f"✅ AI 生成完成")
@@ -396,6 +563,35 @@ class WorkflowExecutor:
             
             print(f"\n📝 构建模板数据...")
             
+            # 构建 args 参数（包含环境变量配置）
+            args_list = []
+            
+            # 添加环境变量配置 - 修复字段格式
+            if hasattr(self, 'env_vars_config') and self.env_vars_config:
+                print(f"   📋 添加 {len(self.env_vars_config)} 个环境变量到配置")
+                for env_var in self.env_vars_config:
+                    # 使用正确的API格式
+                    arg_item = {
+                        "arg_name": env_var['name'],  # ✅ 使用 arg_name
+                        "default_value": env_var.get('example', ''),  # ✅ 使用 default_value
+                        "description": emcp_mgr.make_multi_lang(
+                            env_var.get('description', env_var['name']),
+                            env_var.get('description', env_var['name']),
+                            env_var.get('description', env_var['name'])
+                        ),
+                        "auth_method_id": "",
+                        "type": 2,  # ✅ 2 = custom_value（数字类型）
+                        "paramter_type": 1,  # ✅ 1 = StartupParameter
+                        "input_source": 1,  # ✅ 1 = AdminInput
+                        "showDefault": False,
+                        "oauth_authorized": False,
+                        "r": env_var.get('required', False)  # ✅ 添加必需的 r 字段
+                    }
+                    args_list.append(arg_item)
+                    print(f"     • {env_var['name']}: {env_var['description']}")
+            else:
+                print(f"   ℹ️ 无需环境变量配置")
+            
             # 使用build_template_data构建完整数据
             full_template_data = emcp_mgr.build_template_data(
                 name=self.template_data.get("name_zh_cn", self.package_name),
@@ -404,9 +600,10 @@ class WorkflowExecutor:
                 logo_url=default_logo,  # 使用默认Logo
                 template_category_id=template_category_id,  # 使用获取的分类ID
                 template_source_id=self.package_name,  # 使用包名作为来源ID
-                command=f"uvx {self.package_name}",
-                route_prefix=self.package_name[:10],  # 限制10字符
-                package_type=2,  # PyPI
+                command=self._generate_command_by_type(),  # 根据类型生成命令
+                route_prefix=self._generate_route_prefix(),  # 生成合法的路由前缀
+                package_type=self._get_package_type_code(),  # 根据类型获取代码
+                args=args_list,  # ✅ 添加环境变量配置
                 name_en=self.template_data.get("name_en", self.package_name),
                 summary_en=self.template_data.get("description_en", f"{self.package_name} MCP Server"),
                 description_en=self.template_data.get("description_en", f"{self.package_name} MCP Server"),
@@ -505,6 +702,17 @@ class WorkflowExecutor:
             report_file = f"mcp_test_report_{self.template_id[:8]}.html"
             tester.generate_test_report_html(report, report_file)
             
+            # 检查是否成功（特别是 Server 是否启动）
+            if report.get('error') and 'MCP Server 启动失败' in str(report.get('error')):
+                print(f"\n⛔ MCP Server 启动失败!")
+                print(f"📊 测试报告: {report_file}")
+                print(f"\n💡 请修复以下问题后再继续：")
+                print(f"   1. 确认包已成功发布到 npm/pypi")
+                print(f"   2. 确认包名正确（当前: {self.package_name}）")
+                print(f"   3. 检查 GitHub Actions 构建日志")
+                print(f"\n⏸️ 停止后续流程（Agent测试/对话测试）")
+                raise Exception("MCP Server 启动失败，停止后续流程")
+            
             print(f"✅ MCP 测试完成")
             print(f"📊 测试报告: {report_file}")
             
@@ -517,9 +725,14 @@ class WorkflowExecutor:
                 
                 if tools_report.get('edgeone_url'):
                     print(f"🌐 公开链接: {tools_report['edgeone_url']}")
+            else:
+                print(f"⚠️ 未获取到工具测试结果")
             
         except Exception as e:
             print(f"⚠️ MCP 测试失败: {str(e)}")
+            # 如果是 Server 启动失败，重新抛出异常以停止后续流程
+            if "MCP Server 启动失败" in str(e) or "停止后续流程" in str(e):
+                raise
             print(f"ℹ️ 跳过测试，继续执行")
         
         print(f"✅ 步骤完成\n")
