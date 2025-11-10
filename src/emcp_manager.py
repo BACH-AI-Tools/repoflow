@@ -36,10 +36,12 @@ class HTTPLogger:
         if payload:
             cls.log(f"📦 请求参数:")
             payload_json = json.dumps(payload, indent=2, ensure_ascii=False)
-            for line in payload_json.split('\n')[:100]:  # 限制行数
+            newline = '\n'
+            payload_lines = payload_json.split(newline)
+            for line in payload_lines[:100]:  # 限制行数
                 cls.log(f"   {line}")
-            if len(payload_json.split('\n')) > 100:
-                cls.log(f"   ... (省略 {len(payload_json.split('\n')) - 100} 行)")
+            if len(payload_lines) > 100:
+                cls.log(f"   ... (省略 {len(payload_lines) - 100} 行)")
         cls.log(f"{'='*70}\n")
     
     @classmethod
@@ -50,10 +52,12 @@ class HTTPLogger:
         if response_data:
             cls.log(f"📋 响应数据:")
             response_json = json.dumps(response_data, indent=2, ensure_ascii=False)
-            for line in response_json.split('\n')[:100]:
+            newline = '\n'
+            response_lines = response_json.split(newline)
+            for line in response_lines[:100]:
                 cls.log(f"   {line}")
-            if len(response_json.split('\n')) > 100:
-                cls.log(f"   ... (省略 {len(response_json.split('\n')) - 100} 行)")
+            if len(response_lines) > 100:
+                cls.log(f"   ... (省略 {len(response_lines) - 100} 行)")
         elif response_text:
             cls.log(f"📋 响应文本:")
             for line in response_text[:500].split('\n'):
