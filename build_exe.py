@@ -39,7 +39,7 @@ def build():
     
     # PyInstaller 参数
     args = [
-        'repoflow_gui.py',          # 主程序
+        'mcp_factory_gui.py',        # 主程序
         '--name=RepoFlow',           # 应用名称
         '--onefile',                 # 打包成单个文件
         
