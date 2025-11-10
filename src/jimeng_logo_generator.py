@@ -149,7 +149,8 @@ class JimengLogoGenerator:
         self,
         package_url: str,
         emcp_base_url: str = "https://sit-emcp.kaleido.guru",
-        use_v40: bool = True
+        use_v40: bool = True,
+        fallback_description: str = None
     ) -> Dict:
         """
         从包地址生成 Logo 并上传到 EMCP
@@ -158,6 +159,7 @@ class JimengLogoGenerator:
             package_url: 包地址 (PyPI/NPM/Docker)
             emcp_base_url: EMCP 平台地址
             use_v40: 是否使用即梦 4.0 (推荐)
+            fallback_description: 降级描述（当包不存在时使用）
         
         Returns:
             {
@@ -179,10 +181,26 @@ class JimengLogoGenerator:
             package_info = self.package_fetcher.detect_package_type(package_url)
             
             if package_info['type'] == 'unknown':
-                return {
-                    "success": False,
-                    "error": f"无法识别包类型: {package_url}"
-                }
+                # 不直接失败，使用降级方案
+                print(f"⚠️ 包不存在或未发布，使用降级方案生成 Logo")
+                if fallback_description:
+                    # 构造虚拟的 package_info 用于生成
+                    package_info = {
+                        'type': 'npm',  # 默认类型
+                        'package_name': package_url,
+                        'url': '',
+                        'info': {
+                            'name': package_url,
+                            'summary': fallback_description[:200],
+                            'description': fallback_description
+                        }
+                    }
+                    print(f"✅ 使用降级描述: {fallback_description[:100]}...")
+                else:
+                    return {
+                        "success": False,
+                        "error": f"无法识别包类型且无降级描述: {package_url}"
+                    }
             
             print(f"✅ 包类型: {package_info['type']}")
             print(f"✅ 包名: {package_info['package_name']}")
@@ -263,16 +281,27 @@ class JimengLogoGenerator:
         package_name = package_info['package_name']
         package_type = package_info['type']
         
-        # 获取描述
-        description = (
-            info.get('summary') or 
-            info.get('description') or 
-            f"{package_name} - {package_type} package"
-        )
+        # 获取描述（优先使用完整 README）
+        readme = info.get('readme', info.get('description', ''))
+        summary = info.get('summary', '')
         
-        # 截取描述
-        if len(description) > 150:
-            description = description[:150] + "..."
+        # 使用更详细的描述（最多500字符）
+        if readme and len(readme) > 100:
+            description = readme[:500]  # ✅ 使用更长的描述
+            print(f"   📖 使用 README 生成提示词 ({len(readme)} 字符)")
+        elif summary:
+            description = summary[:300]
+            print(f"   📝 使用简介生成提示词")
+        else:
+            description = f"{package_name} - {package_type} package"
+            print(f"   ⚠️  使用默认描述")
+        
+        # 清理描述（移除 Markdown 标记，保留文字）
+        import re
+        description = re.sub(r'#+\s*', '', description)  # 移除标题标记
+        description = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', description)  # 移除链接但保留文字
+        description = re.sub(r'```.*?```', '', description, flags=re.DOTALL)  # 移除代码块
+        description = description.strip()
         
         # 根据包类型选择图标元素
         type_elements = {
@@ -397,8 +426,11 @@ class JimengLogoGenerator:
             response.raise_for_status()
             image_data = response.content
             
-            # 保存文件
-            filename = f"logo_{package_name}.png"
+            # 清理文件名中的非法字符（/, \, :, *, ?, ", <, >, |, @）
+            import re
+            safe_name = re.sub(r'[/\\:*?"<>|@]', '_', package_name)
+            filename = f"logo_{safe_name}.png"
+            
             with open(filename, 'wb') as f:
                 f.write(image_data)
             
