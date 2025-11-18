@@ -166,6 +166,10 @@ class PackageFetcher:
             response.raise_for_status()
             info = data.get('info', {})
             
+            # PyPI 的 description 字段就是完整的 README（通常是 Markdown）
+            description = info.get('description', '')
+            PackageLogger.log(f"📄 描述长度: {len(description)} 字符")
+            
             return {
                 'type': 'pypi',
                 'package_name': package_name,
@@ -174,7 +178,8 @@ class PackageFetcher:
                     'name': info.get('name', package_name),
                     'version': info.get('version', '1.0.0'),
                     'summary': info.get('summary', ''),
-                    'description': info.get('description', ''),
+                    'description': description,  # ✅ 完整的描述/README
+                    'readme': description,  # ✅ 保留为 readme 字段
                     'author': info.get('author', ''),
                     'license': info.get('license', ''),
                     'home_page': info.get('home_page', ''),
@@ -223,6 +228,12 @@ class PackageFetcher:
             latest_version = data.get('dist-tags', {}).get('latest', '1.0.0')
             version_info = data.get('versions', {}).get(latest_version, {})
             
+            # 获取完整的 README
+            readme = data.get('readme', '')
+            
+            # NPM Registry API 返回完整的 README
+            PackageLogger.log(f"📄 README 长度: {len(readme)} 字符")
+            
             return {
                 'type': 'npm',
                 'package_name': package_name,
@@ -231,7 +242,8 @@ class PackageFetcher:
                     'name': data.get('name', package_name),
                     'version': latest_version,
                     'summary': version_info.get('description', ''),
-                    'description': data.get('readme', ''),
+                    'description': readme,  # ✅ 完整的 README
+                    'readme': readme,  # ✅ 保留原始 README
                     'author': version_info.get('author', {}).get('name', '') if isinstance(version_info.get('author'), dict) else str(version_info.get('author', '')),
                     'license': version_info.get('license', ''),
                     'home_page': version_info.get('homepage', ''),

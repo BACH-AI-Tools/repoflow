@@ -30,7 +30,10 @@
   
   "jimeng": {
     "enabled": true,
-    "mcp_url": "sse+https://jm-mcp.kaleido.guru/sse"
+    "mcp_url": "http://mcptest013.sitmcp.kaleido.guru/sse",
+    "emcp_key": "PI1EQcsELJ7uPJnL3VNS89UaNIgRkL8n",
+    "emcp_usercode": "VGSdDTgj",
+    "_note": "即梦 MCP Logo 生成配置"
   },
   
   "edgeone": {

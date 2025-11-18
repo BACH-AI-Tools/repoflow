@@ -554,21 +554,41 @@ class EMCPManager:
         Returns:
             模板数据字典（供用户编辑）
         """
-        # 读取 README.md
+        # 读取完整的 README.md
         readme_path = project_path / "README.md"
+        readme_content = ""
         description = ""
         summary = f"{project_path.name} MCP Server"
         
         if readme_path.exists():
             try:
                 readme_content = readme_path.read_text(encoding='utf-8')
-                # 提取第一段作为简介
+                
+                # 提取标题和简介
                 lines = [l.strip() for l in readme_content.split('\n') if l.strip()]
-                if len(lines) > 1:
-                    summary = lines[1][:200]  # 第一行通常是标题，第二行是简介
-                description = readme_content[:1000]  # 限制长度
-            except:
+                
+                # 智能提取简介
+                for i, line in enumerate(lines):
+                    # 跳过第一行标题
+                    if i == 0 and line.startswith('#'):
+                        continue
+                    # 找到第一个非标题的段落作为简介
+                    if not line.startswith('#') and not line.startswith('```') and len(line) > 20:
+                        summary = line[:300]  # 取前300字符作为简介
+                        break
+                
+                # 使用完整的 README 作为详细描述（保留格式）
+                description = readme_content  # ✅ 不再限制长度，使用完整内容
+                
+                print(f"📋 已读取 README.md: {len(readme_content)} 字符")
+                print(f"📝 简介: {summary[:100]}...")
+                print(f"📄 描述: {len(description)} 字符")
+                
+            except Exception as e:
+                print(f"⚠️  读取 README.md 失败: {e}")
                 pass
+        else:
+            print(f"⚠️  未找到 README.md")
         
         # 项目名称
         project_name = project_path.name.replace('-', ' ').replace('_', ' ').title()

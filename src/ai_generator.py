@@ -41,20 +41,37 @@ class AITemplateGenerator:
         # 初始化即梦MCP客户端（用于Logo生成）
         self.jimeng_client = None
         try:
-            from jimeng_logo_generator import JimengLogoGenerator
+            from src.jimeng_logo_generator import JimengLogoGenerator
+            from src.unified_config_manager import UnifiedConfigManager
             
-            # 即梦 MCP 配置
-            jimeng_config = {
-                "base_url": "http://mcptest013.sitmcp.kaleido.guru/sse",
-                "headers": {
-                    "emcp-key": "PI1EQcsELJ7uPJnL3VNS89UaNIgRkL8n",
-                    "emcp-usercode": "VGSdDTgj"
+            # 从配置文件读取即梦 MCP 配置
+            config_mgr = UnifiedConfigManager()
+            jimeng_cfg = config_mgr.get_jimeng_config()
+            
+            print(f"\n📋 即梦配置:")
+            print(f"   启用状态: {jimeng_cfg.get('enabled', True)}")
+            print(f"   MCP URL: {jimeng_cfg.get('mcp_url', '未配置')}")
+            
+            if jimeng_cfg.get("enabled", True):
+                jimeng_config = {
+                    "base_url": jimeng_cfg.get("mcp_url", "http://mcptest013.sitmcp.kaleido.guru/sse"),
+                    "headers": {
+                        "emcp-key": jimeng_cfg.get("emcp_key", "PI1EQcsELJ7uPJnL3VNS89UaNIgRkL8n"),
+                        "emcp-usercode": jimeng_cfg.get("emcp_usercode", "VGSdDTgj")
+                    }
                 }
-            }
-            
-            self.jimeng_client = JimengLogoGenerator(jimeng_config)
+                
+                print(f"   正在初始化即梦 MCP 客户端...")
+                self.jimeng_client = JimengLogoGenerator(jimeng_config)
+                print("✅ 即梦 MCP 客户端已初始化")
+                print(f"   Base URL: {jimeng_config['base_url']}")
+            else:
+                print("⚠️  即梦 AI Logo 生成已在设置中禁用")
         except Exception as e:
             # 即梦客户端初始化失败，不影响其他功能
+            print(f"❌ 即梦客户端初始化失败: {str(e)}")
+            import traceback
+            print(f"   详细错误:\n{traceback.format_exc()}")
             pass
         
         # 初始化 Logo 生成器
@@ -143,14 +160,26 @@ class AITemplateGenerator:
 - ID: 5, 名称: 其他
 """
         
+        # 获取完整的 README/描述
+        full_readme = info.get('readme', info.get('description', ''))
+        
+        # 如果有 README，使用完整内容；否则使用简介
+        description_for_ai = full_readme if full_readme else info.get('summary', '暂无')
+        
+        # 限制 AI prompt 的长度（但保留更多信息）
+        if len(description_for_ai) > 3000:
+            description_for_ai = description_for_ai[:3000] + "\n\n... (描述较长，已截取前3000字符)"
+        
         prompt = f"""
 请根据以下包信息，为一个 MCP (Model Context Protocol) Server 生成吸引人的模板描述。
 
 **包类型**: {package_type.upper()}
 **包名**: {package_name}
 **版本**: {info.get('version', '1.0.0')}
-**原始简介**: {info.get('summary', '暂无')[:200]}
-**原始描述**: {info.get('description', '暂无')[:500]}
+**原始简介**: {info.get('summary', '暂无')}
+**完整描述/README**:
+{description_for_ai}
+
 **作者**: {info.get('author', '未知')}
 
 {categories_text}
@@ -217,12 +246,17 @@ class AITemplateGenerator:
         route_prefix = self._normalize_route_prefix(route_prefix)
         
         # 获取或生成 Logo (即梦MCP已启用 ✅)
+        print(f"\n🖼️ 开始生成 Logo...")
+        print(f"   即梦客户端状态: {'已初始化' if self.jimeng_client else '未初始化'}")
+        
         logo_url = self.logo_generator.get_or_generate_logo(
             package_info,
             package_type,
             generate_with_ai=self.enable_logo_generation,
             use_jimeng=True  # ✅ 启用即梦MCP生成Logo
         )
+        
+        print(f"✅ Logo URL: {logo_url}")
         
         return {
             'name': ai_result.get('name_cn', ai_result.get('name', package_name)),

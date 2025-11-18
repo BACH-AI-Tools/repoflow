@@ -227,6 +227,16 @@ class UnifiedConfigManager:
         config["jimeng"]["enabled"] = enabled
         return self.save_config(config)
     
+    def set_jimeng_config(self, mcp_url: str, emcp_key: str, emcp_usercode: str) -> bool:
+        """设置即梦 AI 完整配置"""
+        config = self.load_config()
+        if "jimeng" not in config:
+            config["jimeng"] = {}
+        config["jimeng"]["mcp_url"] = mcp_url
+        config["jimeng"]["emcp_key"] = emcp_key
+        config["jimeng"]["emcp_usercode"] = emcp_usercode
+        return self.save_config(config)
+    
     # ===== EdgeOne 配置 =====
     
     def get_edgeone_config(self) -> Dict[str, Any]:

@@ -62,15 +62,23 @@ class ProjectDetector:
         if not result.get('name'):
             result['name'] = self.project_path.name
         
-        # 读取 README
+        # 读取完整 README
         readme_path = self.project_path / 'README.md'
         if readme_path.exists():
             try:
                 readme_content = readme_path.read_text(encoding='utf-8')
-                # 提取第一段作为描述
+                
+                # 保存完整 README
+                result['readme'] = readme_content
+                
+                # 智能提取简短描述
                 lines = [l.strip() for l in readme_content.split('\n') if l.strip() and not l.startswith('#')]
                 if lines:
-                    result['description'] = lines[0][:500]
+                    # 找到第一个有实际内容的段落
+                    for line in lines:
+                        if len(line) > 20 and not line.startswith('```'):
+                            result['description'] = line[:500]
+                            break
             except:
                 pass
         

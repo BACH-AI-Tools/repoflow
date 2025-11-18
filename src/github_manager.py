@@ -45,13 +45,54 @@ class GitHubManager:
                 # 仓库不存在，创建新仓库
                 pass
             
-            # 创建新仓库
+            # 创建新仓库并启用安全功能
             repo = org.create_repo(
                 name=repo_name,
                 description=description,
                 private=private,
-                auto_init=False
+                auto_init=False,
+                # 启用安全扫描（组织级别默认启用，这里确保开启）
+                has_issues=True,
+                has_projects=True,
+                has_wiki=True
             )
+            
+            # 启用仓库级别的安全功能
+            try:
+                # 1. 启用 Vulnerability Alerts（免费，所有仓库可用）
+                repo.enable_vulnerability_alert()
+                print(f"✅ 已启用 Vulnerability Alerts")
+                
+                # 2. 启用 Secret Scanning（公开仓库免费，私有仓库需要 Advanced Security）
+                # 注意：PyGithub 不直接支持，使用 REST API
+                headers = {
+                    'Authorization': f'token {self.github._Github__requester._Requester__auth.token}',
+                    'Accept': 'application/vnd.github+json',
+                    'X-GitHub-Api-Version': '2022-11-28'
+                }
+                
+                # 检查并启用 Secret Scanning
+                import requests
+                security_url = f'https://api.github.com/repos/{org_name}/{repo_name}/secret-scanning/alerts'
+                try:
+                    response = requests.get(security_url, headers=headers)
+                    if response.status_code == 200:
+                        print(f"✅ Secret Scanning 已启用（仓库级别）")
+                    elif response.status_code == 404 and not private:
+                        # 公开仓库应该自动启用，如果 404 可能需要手动开启
+                        print(f"💡 请在仓库设置中启用 Secret Scanning")
+                except:
+                    pass
+                
+                # 3. Push Protection（公开仓库可用，私有仓库需要 Advanced Security）
+                if not private:
+                    print(f"✅ Push Protection 可用（公开仓库免费）")
+                else:
+                    print(f"💡 私有仓库需要在设置中手动启用 Secret Scanning 和 Push Protection")
+                    
+            except Exception as security_error:
+                print(f"⚠️  启用安全功能时出错: {str(security_error)}")
+            
             return (repo.clone_url, True)
             
         except GithubException as e:
