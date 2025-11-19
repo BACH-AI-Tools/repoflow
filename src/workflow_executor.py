@@ -38,6 +38,7 @@ class WorkflowExecutor:
         self.github_repo_url = None
         self.package_name = None
         self.package_type = None  # 添加 package_type 属性
+        self.package_command = None  # 从 README 提取的命令
         self.template_id = None
         self.env_vars_config = []  # 环境变量配置
         
@@ -260,10 +261,20 @@ class WorkflowExecutor:
     
     def _generate_command_by_type(self) -> str:
         """根据项目类型生成启动命令"""
+        # 优先使用从 README 提取的命令
+        if self.package_command:
+            return self.package_command
+        
+        # 如果没有提取到命令，自动生成
         if self.package_type and self.package_type.lower() == 'node.js':
             return f"npx {self.package_name}"
         else:
-            return f"uvx {self.package_name}"
+            # Python 包：使用 uvx --from 格式
+            # 包名用横杠，模块名用下划线
+            module_name = self.package_name.replace('-', '_')
+            # 使用实际版本号
+            version = self.version if self.version else "1.0.0"
+            return f"uvx --from {self.package_name}@{version} {module_name}"
     
     def _get_package_type_code(self) -> int:
         """获取包类型代码"""
@@ -277,8 +288,8 @@ class WorkflowExecutor:
         import re
         # 从包名提取，移除作用域前缀
         name = self.package_name.split('/')[-1] if '/' in self.package_name else self.package_name
-        # 移除 bachai- 前缀
-        name = name.replace('bachai-', '').replace('bachai', '')
+        # 移除 bachai- 和 bach- 前缀
+        name = name.replace('bachai-', '').replace('bachai', '').replace('bach-', '').replace('bach', '')
         # 只保留字母和数字
         name = re.sub(r'[^a-z0-9]', '', name.lower())
         # 如果以数字开头，添加前缀
@@ -300,35 +311,164 @@ class WorkflowExecutor:
         print(f"步骤: 获取包信息")
         print(f"{'='*60}")
         
-        # 从项目配置文件读取真实的包名，而不是自动添加前缀
-        if self.package_type and self.package_type.lower() == 'node.js':
-            # Node.js 项目从 package.json 读取包名
-            import json
-            package_json_path = Path(self.project_path) / 'package.json'
-            if package_json_path.exists():
-                try:
-                    with open(package_json_path, 'r', encoding='utf-8') as f:
-                        package_data = json.load(f)
-                        self.package_name = package_data.get('name', self.repo_name)
-                except Exception as e:
-                    print(f"⚠️ 读取 package.json 失败: {e}")
-                    self.package_name = self.repo_name
-            else:
-                self.package_name = self.repo_name
-        else:
-            # Python 项目从 setup.py 或 pyproject.toml 读取包名
-            # 如果没有特殊前缀，使用仓库名
-            self.package_name = self.repo_name
+        # 使用 ProjectDetector 读取真实的包名和命令
+        from src.project_detector import ProjectDetector
+        detector = ProjectDetector(self.project_path)
+        project_info = detector.detect()
         
-        print(f"📦 包名: {self.package_name}")
+        # 优先使用检测到的包名，如果没有则使用仓库名
+        detected_package_name = project_info.get('package_name')
+        if detected_package_name:
+            self.package_name = detected_package_name
+            print(f"📦 检测到包名: {self.package_name}")
+        else:
+            self.package_name = self.repo_name
+            print(f"📦 包名（使用仓库名）: {self.package_name}")
+        
+        # 从 README 提取命令
+        detected_command = project_info.get('command')
+        if detected_command:
+            self.package_command = detected_command
+            print(f"🔧 从 README 提取命令: {self.package_command}")
+        else:
+            print(f"ℹ️ README 中未找到命令，将自动生成")
+        
         print(f"🔧 项目类型: {self.package_type}")
         print(f"✅ 步骤完成\n")
+    
+    def _load_multilang_readmes(self):
+        """
+        加载多语言 README 文件
+        优先查找 mcp 文件夹中的 README 文件
+        
+        Returns:
+            dict: 包含三种语言描述的字典，如果找到则跳过 AI 生成
+        """
+        mcp_dir = self.project_path / "mcp"
+        
+        # README 文件映射
+        readme_files = {
+            "description_zh_cn": ["readme.md", "README.md", "README_ZH-CN.md"],
+            "description_en": ["README_EN.md", "README-EN.md"],
+            "description_zh_tw": ["README_ZH-TW.md", "README-ZH-TW.md"]
+        }
+        
+        loaded_content = {}
+        
+        # 优先从 mcp 文件夹读取
+        if mcp_dir.exists():
+            print(f"📁 找到 mcp 文件夹")
+            for key, filenames in readme_files.items():
+                for filename in filenames:
+                    file_path = mcp_dir / filename
+                    if file_path.exists():
+                        try:
+                            content = file_path.read_text(encoding='utf-8')
+                            loaded_content[key] = content
+                            print(f"   ✅ 读取 {filename}: {len(content)} 字符")
+                            break
+                        except Exception as e:
+                            print(f"   ⚠️ 读取 {filename} 失败: {e}")
+        
+        # 如果 mcp 文件夹不存在或文件不全，从项目根目录读取
+        if len(loaded_content) < 3:
+            print(f"📁 从项目根目录查找 README 文件")
+            for key, filenames in readme_files.items():
+                if key in loaded_content:
+                    continue
+                for filename in filenames:
+                    file_path = self.project_path / filename
+                    if file_path.exists():
+                        try:
+                            content = file_path.read_text(encoding='utf-8')
+                            loaded_content[key] = content
+                            print(f"   ✅ 读取 {filename}: {len(content)} 字符")
+                            break
+                        except Exception as e:
+                            print(f"   ⚠️ 读取 {filename} 失败: {e}")
+        
+        # 如果至少找到了简体中文 README，返回加载的内容
+        if "description_zh_cn" in loaded_content:
+            # 如果缺少繁体或英文，使用简体中文作为备用
+            if "description_zh_tw" not in loaded_content:
+                loaded_content["description_zh_tw"] = loaded_content["description_zh_cn"]
+                print(f"   ℹ️ 未找到繁体 README，使用简体版本")
+            if "description_en" not in loaded_content:
+                loaded_content["description_en"] = loaded_content["description_zh_cn"]
+                print(f"   ℹ️ 未找到英文 README，使用简体版本")
+            
+            # 添加名称（从 README 第一行提取或使用包名）
+            for lang_key, desc_key in [
+                ("name_zh_cn", "description_zh_cn"),
+                ("name_zh_tw", "description_zh_tw"),
+                ("name_en", "description_en")
+            ]:
+                if desc_key in loaded_content:
+                    # 尝试从 README 第一行提取标题
+                    lines = loaded_content[desc_key].split('\n')
+                    title = None
+                    for line in lines:
+                        line = line.strip()
+                        if line.startswith('#'):
+                            title = line.lstrip('#').strip()
+                            break
+                    loaded_content[lang_key] = title if title else self.package_name
+            
+            print(f"✅ 成功加载 {len([k for k in loaded_content.keys() if k.startswith('description_')])} 个语言的 README 文件")
+            return loaded_content
+        
+        return None
     
     def step_ai_generate(self):
         """AI生成模板"""
         print(f"\n{'='*60}")
         print(f"步骤: AI 生成模板")
         print(f"{'='*60}")
+        
+        # 首先尝试加载多语言 README 文件
+        print(f"\n📚 尝试加载多语言 README 文件...")
+        multilang_readmes = self._load_multilang_readmes()
+        
+        if multilang_readmes:
+            print(f"✅ 直接使用 README 文件内容作为描述（跳过 AI 生成）")
+            self.template_data = multilang_readmes
+            print(f"  中文: {multilang_readmes.get('name_zh_cn', '')}")
+            print(f"  繁体: {multilang_readmes.get('name_zh_tw', '')}")
+            print(f"  英文: {multilang_readmes.get('name_en', '')}")
+            
+            # 仍需检测环境变量
+            print(f"\n🔍 检测环境变量配置...")
+            from src.env_var_detector import EnvVarDetector
+            detector = EnvVarDetector()
+            env_vars = detector.detect_from_project(self.project_path)
+            
+            if env_vars:
+                print(f"   发现 {len(env_vars)} 个环境变量需要配置")
+                for var in env_vars:
+                    required_text = "必需" if var['required'] else "可选"
+                    print(f"   - {var['name']}: {var['description']} ({required_text})")
+                
+                from src.env_var_dialog import EnvVarDialog
+                import tkinter as tk
+                root = self.parent if hasattr(self, 'parent') else tk._default_root
+                dialog = EnvVarDialog(root, env_vars, self.package_name)
+                configured_vars = dialog.show()
+                
+                if not configured_vars:
+                    print(f"❌ 用户取消了环境变量配置")
+                    raise Exception("必须配置环境变量才能发布到 EMCP")
+                
+                self.env_vars_config = configured_vars
+                print(f"✅ 用户已配置 {len(configured_vars)} 个环境变量")
+            else:
+                print(f"   ✅ 未检测到需要配置的环境变量")
+                self.env_vars_config = []
+            
+            print(f"✅ 步骤完成\n")
+            return
+        
+        # 如果没有找到 README 文件，继续原有的 AI 生成流程
+        print(f"ℹ️ 未找到多语言 README 文件，使用 AI 生成")
         
         # 检测环境变量配置需求
         print(f"\n🔍 检测环境变量配置...")
@@ -388,7 +528,8 @@ class WorkflowExecutor:
         
         try:
             # 初始化并登录EMCP（用于Logo上传认证）
-            emcp_config = self.config.get("emcp", {})
+            # 使用 get_emcp_config() 自动生成今日验证码
+            emcp_config = self.config_mgr.get_emcp_config()
             if not self.emcp_manager:
                 self.emcp_manager = EMCPManager()
                 self.emcp_manager.base_url = emcp_config.get('base_url', 'https://sit-emcp.kaleido.guru')
@@ -483,7 +624,8 @@ class WorkflowExecutor:
         print(f"步骤: 发布到 EMCP")
         print(f"{'='*60}")
         
-        emcp_config = self.config.get("emcp", {})
+        # 使用 get_emcp_config() 自动生成今日验证码
+        emcp_config = self.config_mgr.get_emcp_config()
         
         if not emcp_config.get("phone_number"):
             print(f"⚠️ 未配置 EMCP 账号，跳过 EMCP 发布")
@@ -532,9 +674,13 @@ class WorkflowExecutor:
             
             print(f"\n📝 获取EMCP平台配置...")
             
-            # 获取默认的Logo URL
-            default_logo = "https://emcp.kaleido.guru/logo/default-mcp-logo.png"
-            print(f"🖼️ 使用默认Logo: {default_logo}")
+            # 获取 Logo URL - 优先使用AI生成的Logo，否则使用默认
+            logo_url = self.template_data.get("logo_url")
+            if logo_url:
+                print(f"🖼️ 使用已生成的Logo: {logo_url}")
+            else:
+                logo_url = "https://emcp.kaleido.guru/logo/default-mcp-logo.png"
+                print(f"🖼️ 使用默认Logo: {logo_url}")
             
             # 获取模板分类ID
             print(f"📋 获取模板分类...")
@@ -597,7 +743,7 @@ class WorkflowExecutor:
                 name=self.template_data.get("name_zh_cn", self.package_name),
                 summary=self.template_data.get("description_zh_cn", f"{self.package_name} MCP服务器"),
                 description=self.template_data.get("description_zh_cn", f"{self.package_name} MCP服务器"),
-                logo_url=default_logo,  # 使用默认Logo
+                logo_url=logo_url,  # 使用AI生成的Logo或默认Logo
                 template_category_id=template_category_id,  # 使用获取的分类ID
                 template_source_id=self.package_name,  # 使用包名作为来源ID
                 command=self._generate_command_by_type(),  # 根据类型生成命令
@@ -613,8 +759,8 @@ class WorkflowExecutor:
             )
             
             print(f"📦 包名: {self.package_name}")
-            print(f"🔧 命令: uvx {self.package_name}")
-            print(f"🛤️ 路由: {self.package_name[:10]}")
+            print(f"🔧 命令: {self._generate_command_by_type()}")
+            print(f"🛤️ 路由: {self._generate_route_prefix()}")
             
             # 发布或更新模板
             print(f"\n🚀 调用 EMCP API...")
@@ -747,7 +893,8 @@ class WorkflowExecutor:
             print(f"⚠️ 未找到模板ID，跳过 Agent 测试")
             return
         
-        agent_config = self.config.get("agent", {})
+        # 使用 get_agent_config() 自动生成今日验证码
+        agent_config = self.config_mgr.get_agent_config()
         
         if not agent_config.get("phone_number"):
             print(f"⚠️ 未配置 Agent 账号，跳过 Agent 测试")
@@ -771,6 +918,8 @@ class WorkflowExecutor:
             )
             
             # 设置Agent平台URL
+            # 使用 get_agent_config() 自动生成今日验证码
+            agent_config = self.config_mgr.get_agent_config()
             tester.agent_client.base_url = agent_config['base_url']
             
             print(f"🔐 登录 Agent 平台...")
@@ -820,7 +969,8 @@ class WorkflowExecutor:
             print(f"   模板ID: {self.template_id}")
             return
         
-        agent_config = self.config.get("agent", {})
+        # 使用 get_agent_config() 自动生成今日验证码
+        agent_config = self.config_mgr.get_agent_config()
         
         if not agent_config.get("phone_number"):
             print(f"⚠️ 未配置 Agent 账号，跳过对话测试")
@@ -845,6 +995,8 @@ class WorkflowExecutor:
             print(f"ℹ️ 复用EMCP登录")
             
             # 创建Agent客户端
+            # 使用 get_agent_config() 自动生成今日验证码
+            agent_config = self.config_mgr.get_agent_config()
             agent_client = AgentPlatformClient()
             agent_client.base_url = agent_config['base_url']
             

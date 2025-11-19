@@ -428,15 +428,22 @@ class JimengLogoGenerator:
             
             # 清理文件名中的非法字符（/, \, :, *, ?, ", <, >, |, @）
             import re
+            from pathlib import Path
+            
+            # 确保 outputs/logos 目录存在
+            logos_dir = Path("outputs/logos")
+            logos_dir.mkdir(parents=True, exist_ok=True)
+            
             safe_name = re.sub(r'[/\\:*?"<>|@]', '_', package_name)
-            filename = f"logo_{safe_name}.png"
+            filename = logos_dir / f"logo_{safe_name}.png"
             
             with open(filename, 'wb') as f:
                 f.write(image_data)
             
-            print(f"   ✅ 已保存: {len(image_data):,} 字节")
+            print(f"   ✅ 已保存到: {filename.absolute()}")
+            print(f"   📦 文件大小: {len(image_data):,} 字节")
             
-            return filename
+            return str(filename)
             
         except Exception as e:
             print(f"   ❌ 保存失败: {e}")

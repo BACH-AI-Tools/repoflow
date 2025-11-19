@@ -864,11 +864,22 @@ MCP名称：{mcp_name}
 </html>
 """
         
-        # 保存文件
+        # 保存文件到 outputs/reports 目录
         import os
-        abs_path = os.path.abspath(output_file)
+        from pathlib import Path
         
-        with open(output_file, 'w', encoding='utf-8') as f:
+        # 确保 outputs/reports 目录存在
+        reports_dir = Path("outputs/reports")
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 如果 output_file 没有路径前缀，添加 outputs/reports/
+        output_path = Path(output_file)
+        if not output_path.parent or output_path.parent == Path('.'):
+            output_path = reports_dir / output_file
+        
+        abs_path = output_path.absolute()
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html)
         
         self.log(f"\n💾 对话测试报告已保存")

@@ -376,8 +376,8 @@ jobs:
         # 生成 setup.py（如果不存在）
         setup_py = project_path / 'setup.py'
         if not setup_py.exists():
-            # 自动添加 bachai 前缀避免包名冲突
-            package_name = f"bachai-{project_path.name.lower()}"
+            # 使用原始项目名作为包名，不自动添加前缀
+            package_name = project_path.name.lower()
             setup_content = f'''"""Setup script for {project_path.name}"""
 
 from setuptools import setup, find_packages
@@ -411,8 +411,8 @@ setup(
         # 生成 pyproject.toml（现代 Python 打包）
         pyproject_toml = project_path / 'pyproject.toml'
         if not pyproject_toml.exists():
-            # 自动添加 bachai 前缀避免包名冲突
-            package_name = f"bachai-{project_path.name.lower()}"
+            # 使用原始项目名作为包名，不自动添加前缀
+            package_name = project_path.name.lower()
             toml_content = f'''[build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"

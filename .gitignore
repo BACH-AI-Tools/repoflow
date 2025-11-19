@@ -48,3 +48,8 @@ config.local.json
 *.exe
 *.dll
 
+# 输出文件（Logo 和报告）
+outputs/
+*.html
+logo_*.png
+

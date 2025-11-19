@@ -610,8 +610,11 @@ class EMCPManager:
             # NPM 包：npx + 包名
             command = f"npx {package_name}"
         elif package_type_name == 'pypi':
-            # PyPI 包：uvx + 包名
-            command = f"uvx {package_name}"
+            # PyPI 包：使用 uvx --from 格式
+            # 包名用横杠，模块名用下划线
+            module_name = package_name.replace('-', '_')
+            # 这里暂时使用 latest，实际版本会在 WorkflowExecutor 中设置
+            command = f"uvx --from {package_name}@latest {module_name}"
         elif package_type_name == 'deno':
             # Deno 包：deno + 包名
             command = f"deno {package_name}"
