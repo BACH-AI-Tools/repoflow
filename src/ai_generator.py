@@ -50,21 +50,59 @@ class AITemplateGenerator:
             
             print(f"\n📋 即梦配置:")
             print(f"   启用状态: {jimeng_cfg.get('enabled', True)}")
-            print(f"   MCP URL: {jimeng_cfg.get('mcp_url', '未配置')}")
             
             if jimeng_cfg.get("enabled", True):
-                jimeng_config = {
-                    "base_url": jimeng_cfg.get("mcp_url", "http://mcptest013.sitmcp.kaleido.guru/sse"),
-                    "headers": {
-                        "emcp-key": jimeng_cfg.get("emcp_key", "PI1EQcsELJ7uPJnL3VNS89UaNIgRkL8n"),
-                        "emcp-usercode": jimeng_cfg.get("emcp_usercode", "VGSdDTgj")
-                    }
-                }
+                # ⭐ 支持两种配置格式：
+                # 1. 旧格式：直接的 mcp_url, emcp_key, emcp_usercode
+                # 2. 新格式（GUI）：mcp_json 格式
                 
-                print(f"   正在初始化即梦 MCP 客户端...")
-                self.jimeng_client = JimengLogoGenerator(jimeng_config)
-                print("✅ 即梦 MCP 客户端已初始化")
-                print(f"   Base URL: {jimeng_config['base_url']}")
+                mcp_url = None
+                emcp_key = None
+                emcp_usercode = None
+                
+                # 优先尝试从 mcp_json 中提取（GUI 格式）
+                mcp_json = jimeng_cfg.get("mcp_json", {})
+                if mcp_json and "mcpServers" in mcp_json:
+                    # 查找第一个 jimeng 相关的服务器配置
+                    for server_name, server_config in mcp_json.get("mcpServers", {}).items():
+                        if "jimeng" in server_name.lower() or server_name == "jimeng":
+                            mcp_url = server_config.get("url")
+                            headers = server_config.get("headers", {})
+                            emcp_key = headers.get("emcp-key")
+                            emcp_usercode = headers.get("emcp-usercode")
+                            print(f"   配置来源: GUI JSON 格式")
+                            break
+                
+                # 如果没有找到，尝试旧格式
+                if not emcp_key or not emcp_usercode:
+                    mcp_url = jimeng_cfg.get("mcp_url")
+                    emcp_key = jimeng_cfg.get("emcp_key")
+                    emcp_usercode = jimeng_cfg.get("emcp_usercode")
+                    if emcp_key or emcp_usercode:
+                        print(f"   配置来源: 配置文件格式")
+                
+                # 检查配置是否完整
+                if not emcp_key or not emcp_usercode:
+                    print("⚠️  即梦配置缺失：emcp-key 或 emcp-usercode 未设置，Logo 生成功能将被禁用")
+                    print("   请在设置窗口的「即梦 MCP 配置」中配置")
+                else:
+                    if not mcp_url:
+                        mcp_url = "http://mcptest013.sitmcp.kaleido.guru/sse"
+                    
+                    print(f"   MCP URL: {mcp_url}")
+                    
+                    jimeng_config = {
+                        "base_url": mcp_url,
+                        "headers": {
+                            "emcp-key": emcp_key,
+                            "emcp-usercode": emcp_usercode
+                        }
+                    }
+                    
+                    print(f"   正在初始化即梦 MCP 客户端...")
+                    self.jimeng_client = JimengLogoGenerator(jimeng_config)
+                    print("✅ 即梦 MCP 客户端已初始化")
+                    print(f"   Base URL: {jimeng_config['base_url']}")
             else:
                 print("⚠️  即梦 AI Logo 生成已在设置中禁用")
         except Exception as e:
@@ -193,9 +231,9 @@ class AITemplateGenerator:
   "summary_cn": "一句话中文简体简介（20-50字，突出核心功能和价值）",
   "summary_tw": "一句話中文繁體簡介（請使用正確的繁體字，如：資料、檔案、網絡、伺服器等）",
   "summary_en": "One-sentence English summary (highlighting core features and value)",
-  "description_cn": "详细功能描述（简体中文，100-300字，包括：核心功能、使用场景、特色优势）",
-  "description_tw": "詳細功能描述（繁體中文，100-300字，請使用正確的繁體字）",
-  "description_en": "Detailed English description (100-300 words: core features, use cases, advantages)",
+  "description_cn": "详细功能描述（简体中文，150-300字，必须按照以下结构：\n第一段：介绍这个 MCP 是干嘛用的（用途、应用场景）\n第二段：介绍这个 MCP 提供的工具（从 README 中提取工具名称和功能，如果有多个工具用列表展示）",
+  "description_tw": "詳細功能描述（繁體中文，150-300字，必須按照以下結構：\n第一段：介紹這個 MCP 是幹嘛用的（用途、應用場景）\n第二段：介紹這個 MCP 提供的工具（從 README 中提取工具名稱和功能，如果有多個工具用列表展示）\n請使用正確的繁體字）",
+  "description_en": "Detailed description (English, 150-300 words, must follow this structure:\nParagraph 1: What this MCP is for (purpose, use cases)\nParagraph 2: Tools provided by this MCP (extract tool names and functions from README, list if multiple tools)",
   "route_prefix": "建议的路由前缀（仅小写字母和数字，不能以数字开头，不超过10字符，如 filesearch）",
   "category_id": "从上面分类列表中选择最合适的ID（只填写ID，如 1、2、3 等）"
 }}
@@ -209,20 +247,28 @@ class AITemplateGenerator:
    - 网络 → 網絡
    - 检索 → 檢索
    - 内容 → 內容
+   - 提供 → 提供
+   - 工具 → 工具
 3. **特殊翻译规则**：
    - bachai → 巴赫 (不是巴凯)
    - bachstudio → 巴赫工作室
    - BACH → 巴赫
    例如：bachai-data-analysis-mcp → 巴赫数据分析服务器
-4. route_prefix 规则：
+4. **描述格式要求（非常重要）**：
+   - 必须分为两段
+   - 第一段：介绍这个 MCP 是什么、用途是什么、适用于什么场景
+   - 第二段：介绍这个 MCP 提供哪些工具，每个工具做什么
+   - 从 README 中仔细提取工具信息，如果 README 中列出了工具列表，一定要在描述中体现
+   - 如果有多个工具，可以用"提供了XXX、YYY、ZZZ等工具"的格式
+5. route_prefix 规则：
    - 只能包含小写字母(a-z)和数字(0-9)
    - 不能以数字开头
    - 不超过10个字符
    - 不要使用横杠或下划线
    - 示例：filesearch, dataanaly, webparser
-5. category_id 必须从上面的分类列表中选择
-6. 所有文本要专业、流畅、吸引人
-7. 必须返回有效的 JSON 格式
+6. category_id 必须从上面的分类列表中选择
+7. 所有文本要专业、流畅、吸引人
+8. 必须返回有效的 JSON 格式
 """
         return prompt
     
@@ -259,15 +305,22 @@ class AITemplateGenerator:
         print(f"✅ Logo URL: {logo_url}")
         
         return {
+            # 名称字段
             'name': ai_result.get('name_cn', ai_result.get('name', package_name)),
-            'name_tw': ai_result.get('name_tw', ai_result.get('name_cn', package_name)),
+            'name_zh_cn': ai_result.get('name_cn', ai_result.get('name', package_name)),
+            'name_zh_tw': ai_result.get('name_tw', ai_result.get('name_cn', package_name)),
             'name_en': ai_result.get('name_en', package_name),
+            # 摘要字段（简短）
             'summary': ai_result.get('summary_cn', ai_result.get('summary', '')),
-            'summary_tw': ai_result.get('summary_tw', ai_result.get('summary_cn', '')),
+            'summary_zh_cn': ai_result.get('summary_cn', ai_result.get('summary', '')),
+            'summary_zh_tw': ai_result.get('summary_tw', ai_result.get('summary_cn', '')),
             'summary_en': ai_result.get('summary_en', ''),
+            # 描述字段（详细）
             'description': ai_result.get('description_cn', ai_result.get('description', '')),
-            'description_tw': ai_result.get('description_tw', ai_result.get('description_cn', '')),
+            'description_zh_cn': ai_result.get('description_cn', ai_result.get('description', '')),
+            'description_zh_tw': ai_result.get('description_tw', ai_result.get('description_cn', '')),
             'description_en': ai_result.get('description_en', ''),
+            # 其他字段
             'command': command,
             'route_prefix': route_prefix,
             'category_id': category_id,
@@ -369,15 +422,22 @@ class AITemplateGenerator:
         command = self._generate_command(package_name, package_type)
         
         return {
+            # 名称字段
             'name': name,
-            'name_tw': name,  # 简单转换，不如LLM准确
+            'name_zh_cn': name,
+            'name_zh_tw': name,  # 简单转换，不如LLM准确
             'name_en': package_name.replace('-', ' ').replace('_', ' ').title(),
+            # 摘要字段（简短）
             'summary': summary,
-            'summary_tw': summary,  # 简单转换
+            'summary_zh_cn': summary,
+            'summary_zh_tw': summary,  # 简单转换
             'summary_en': info.get('summary', summary),  # 使用包的原始英文简介
+            # 描述字段（详细）
             'description': description,
-            'description_tw': description,  # 简单转换
+            'description_zh_cn': description,
+            'description_zh_tw': description,  # 简单转换
             'description_en': info.get('description', description)[:1000],  # 使用包的原始英文描述
+            # 其他字段
             'command': command,
             'route_prefix': route_prefix,
             'category_id': '1',

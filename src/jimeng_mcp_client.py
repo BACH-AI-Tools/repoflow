@@ -35,18 +35,21 @@ class JimengMCPClient:
     
     def __init__(
         self,
-        sse_url: str = "http://mcptest013.sitmcp.kaleido.guru/sse",
-        emcp_key: str = "PI1EQcsELJ7uPJnL3VNS89UaNIgRkL8n",
-        emcp_usercode: str = "VGSdDTgj"
+        sse_url: str,
+        emcp_key: str,
+        emcp_usercode: str
     ):
         """
         初始化即梦MCP客户端
         
         Args:
             sse_url: SSE服务地址
-            emcp_key: EMCP密钥
-            emcp_usercode: EMCP用户码
+            emcp_key: EMCP密钥（必须在配置文件中设置）
+            emcp_usercode: EMCP用户码（必须在配置文件中设置）
         """
+        if not emcp_key or not emcp_usercode:
+            raise ValueError("emcp_key 和 emcp_usercode 不能为空，请在配置文件中设置")
+        
         self.sse_url = sse_url
         self.headers = {
             "emcp-key": emcp_key,

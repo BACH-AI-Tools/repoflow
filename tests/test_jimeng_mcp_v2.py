@@ -158,12 +158,28 @@ def main():
     print("即梦 MCP - Logo 生成测试")
     print("="*70)
     
+    # 从配置文件读取即梦 MCP 配置
+    import sys
+    import os
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+    
+    from src.unified_config_manager import UnifiedConfigManager
+    
+    config_mgr = UnifiedConfigManager()
+    jimeng_cfg = config_mgr.get_jimeng_config()
+    
+    if not jimeng_cfg.get("emcp_key") or not jimeng_cfg.get("emcp_usercode"):
+        print("❌ 错误：请先在配置文件中设置 jimeng.emcp_key 和 jimeng.emcp_usercode")
+        print("   配置文件位置：config.json")
+        print("   参考模板：config_template.json")
+        sys.exit(1)
+    
     # 配置
     config = {
-        "base_url": "http://mcptest013.sitmcp.kaleido.guru/sse",
+        "base_url": jimeng_cfg.get("mcp_url", "http://mcptest013.sitmcp.kaleido.guru/sse"),
         "headers": {
-            "emcp-key": "PI1EQcsELJ7uPJnL3VNS89UaNIgRkL8n",
-            "emcp-usercode": "VGSdDTgj"
+            "emcp-key": jimeng_cfg.get("emcp_key"),
+            "emcp-usercode": jimeng_cfg.get("emcp_usercode")
         }
     }
     

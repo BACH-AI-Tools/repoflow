@@ -259,6 +259,58 @@ class WorkflowExecutor:
         
         print(f"✅ 步骤完成\n")
     
+    def _wait_for_package_published(self, max_wait_seconds: int = 60) -> bool:
+        """
+        等待包发布到包源
+        
+        Args:
+            max_wait_seconds: 最大等待时间（秒），默认 60 秒
+        
+        Returns:
+            bool: 包是否已发布
+        """
+        import time
+        from src.package_fetcher import PackageFetcher
+        
+        fetcher = PackageFetcher()
+        check_interval = 10  # 每 10 秒检查一次
+        elapsed = 0
+        attempt = 1
+        
+        while elapsed < max_wait_seconds:
+            print(f"   🔍 检查第 {attempt} 次...")
+            
+            # 根据包类型检查
+            result = None
+            if self.package_type == 'pypi':
+                result = fetcher.fetch_pypi(self.package_name)
+            elif self.package_type == 'npm':
+                result = fetcher.fetch_npm(self.package_name)
+            elif self.package_type == 'docker':
+                result = fetcher.fetch_docker(self.package_name)
+            
+            # 检查是否找到包
+            if result and result.get('type') != 'unknown':
+                print(f"   ✅ 包已发布到 {self.package_type}")
+                if result.get('info'):
+                    version = result['info'].get('version', '未知')
+                    print(f"   📌 版本: {version}")
+                return True
+            
+            # 未找到，等待后重试
+            if elapsed + check_interval < max_wait_seconds:
+                remaining = max_wait_seconds - elapsed
+                wait_time = min(check_interval, remaining)
+                print(f"   ⏳ 包未发布，等待 {wait_time} 秒后重试... (剩余 {remaining} 秒)")
+                time.sleep(wait_time)
+                elapsed += wait_time
+                attempt += 1
+            else:
+                break
+        
+        print(f"   ❌ 超时：等待 {max_wait_seconds} 秒后包仍未发布")
+        return False
+    
     def _generate_command_by_type(self) -> str:
         """根据项目类型生成启动命令"""
         # 优先使用从 README 提取的命令
@@ -514,9 +566,12 @@ class WorkflowExecutor:
                 "name_zh_cn": self.package_name,
                 "name_zh_tw": self.package_name,
                 "name_en": self.package_name,
-                "description_zh_cn": f"{self.package_name} MCP服务器",
-                "description_zh_tw": f"{self.package_name} MCP伺服器",
-                "description_en": f"{self.package_name} MCP Server"
+                "summary_zh_cn": f"{self.package_name} MCP服务器",  # ✅ 摘要字段
+                "summary_zh_tw": f"{self.package_name} MCP伺服器",
+                "summary_en": f"{self.package_name} MCP Server",
+                "description_zh_cn": f"{self.package_name} 是一个功能强大的 MCP 服务器",  # ✅ 描述字段
+                "description_zh_tw": f"{self.package_name} 是一個功能強大的 MCP 伺服器",
+                "description_en": f"{self.package_name} is a powerful MCP Server"
             }
             print(f"✅ 使用基础模板")
             print(f"✅ 步骤完成\n")
@@ -554,6 +609,9 @@ class WorkflowExecutor:
                 deployment_name=ai_config['deployment_name'],
                 emcp_manager=self.emcp_manager  # 使用已登录的实例
             )
+            
+            # ⭐ 保存为实例变量，供后续测试步骤使用
+            self.ai_generator = ai_gen
             
             # 从本地项目读取完整信息
             from src.project_detector import ProjectDetector
@@ -593,7 +651,13 @@ class WorkflowExecutor:
             self.template_data = {
                 "name_zh_cn": self.package_name,
                 "name_zh_tw": self.package_name,
-                "name_en": self.package_name
+                "name_en": self.package_name,
+                "summary_zh_cn": f"{self.package_name} MCP服务器",  # ✅ 摘要字段
+                "summary_zh_tw": f"{self.package_name} MCP伺服器",
+                "summary_en": f"{self.package_name} MCP Server",
+                "description_zh_cn": f"{self.package_name} 是一个功能强大的 MCP 服务器",  # ✅ 描述字段
+                "description_zh_tw": f"{self.package_name} 是一個功能強大的 MCP 伺服器",
+                "description_en": f"{self.package_name} is a powerful MCP Server"
             }
         
         print(f"✅ 步骤完成\n")
@@ -604,18 +668,157 @@ class WorkflowExecutor:
         print(f"步骤: 生成 Logo")
         print(f"{'='*60}")
         
-        jimeng_config = self.config.get("jimeng", {})
+        jimeng_config = self.config_mgr.get_jimeng_config()
         
         if not jimeng_config.get("enabled", True):
-            print(f"⚠️ 即梦 AI 未启用，跳过 Logo 生成")
+            print(f"⚠️ 即梦 Logo 生成未启用，使用默认 Logo")
+            self.logo_url = "https://emcp.kaleido.guru/logo/default-mcp-logo.png"
             return
         
-        mcp_url = jimeng_config.get("mcp_url", "sse+https://jm-mcp.kaleido.guru/sse")
-        print(f"🎨 即梦 MCP URL: {mcp_url}")
+        # 尝试获取即梦客户端（优先使用已初始化的）
+        jimeng_client = None
         
-        # TODO: 集成真实的Logo生成
-        print(f"ℹ️ Logo 生成功能待集成")
-        print(f"ℹ️ 可配置 Azure OpenAI 后启用AI Logo生成")
+        # 方法 1: 如果 AI 生成器已初始化，复用其即梦客户端
+        if hasattr(self, 'ai_generator') and self.ai_generator and hasattr(self.ai_generator, 'jimeng_client'):
+            jimeng_client = self.ai_generator.jimeng_client
+            if jimeng_client:
+                print(f"✓ 复用 AI 生成器的即梦客户端")
+        
+        # 方法 2: 如果没有可复用的，独立初始化即梦客户端
+        if not jimeng_client:
+            print(f"🔧 独立初始化即梦 MCP 客户端...")
+            try:
+                # 解析配置
+                mcp_url = None
+                emcp_key = None
+                emcp_usercode = None
+                
+                # 优先从 mcp_json 中提取（GUI 格式）
+                mcp_json = jimeng_config.get("mcp_json", {})
+                if mcp_json and "mcpServers" in mcp_json:
+                    for server_name, server_config in mcp_json.get("mcpServers", {}).items():
+                        if "jimeng" in server_name.lower():
+                            mcp_url = server_config.get("url")
+                            headers = server_config.get("headers", {})
+                            emcp_key = headers.get("emcp-key")
+                            emcp_usercode = headers.get("emcp-usercode")
+                            print(f"   配置来源: GUI JSON 格式")
+                            break
+                
+                # 如果没有找到，尝试旧格式
+                if not emcp_key or not emcp_usercode:
+                    mcp_url = jimeng_config.get("mcp_url")
+                    emcp_key = jimeng_config.get("emcp_key")
+                    emcp_usercode = jimeng_config.get("emcp_usercode")
+                    if emcp_key or emcp_usercode:
+                        print(f"   配置来源: 配置文件格式")
+                
+                # 检查配置是否完整
+                if not emcp_key or not emcp_usercode:
+                    print(f"⚠️  即梦凭证未配置（emcp-key 或 emcp-usercode 缺失）")
+                    print(f"   使用默认 Logo")
+                    self.logo_url = "https://emcp.kaleido.guru/logo/default-mcp-logo.png"
+                    print(f"✅ 步骤完成\n")
+                    return
+                
+                # 初始化即梦客户端
+                if not mcp_url:
+                    mcp_url = "http://mcptest013.sitmcp.kaleido.guru/sse"
+                
+                jimeng_client_config = {
+                    "base_url": mcp_url,
+                    "headers": {
+                        "emcp-key": emcp_key,
+                        "emcp-usercode": emcp_usercode
+                    }
+                }
+                
+                jimeng_client = JimengLogoGenerator(jimeng_client_config)
+                print(f"✅ 即梦客户端初始化成功")
+                
+            except Exception as e:
+                print(f"❌ 即梦客户端初始化失败: {e}")
+                print(f"   使用默认 Logo")
+                self.logo_url = "https://emcp.kaleido.guru/logo/default-mcp-logo.png"
+                print(f"✅ 步骤完成\n")
+                return
+        
+        # 使用即梦客户端生成 Logo
+        if jimeng_client:
+            print(f"🎨 使用即梦 MCP 生成 Logo...")
+            try:
+                emcp_config = self.config_mgr.get_emcp_config()
+                emcp_base_url = emcp_config.get("base_url", "https://sit-emcp.kaleido.guru")
+                
+                # 尝试从命令中提取完整包名（带前缀）
+                package_url = self.package_name
+                if self.package_command:
+                    # 从命令中提取包名，例如 "uvx --from bach-xxx" 或 "npx @org/xxx"
+                    import re
+                    # PyPI: uvx --from package_name
+                    pypi_match = re.search(r'uvx\s+--from\s+([^\s@]+)', self.package_command)
+                    if pypi_match:
+                        package_url = pypi_match.group(1)
+                        print(f"   📦 从命令提取包名: {package_url}")
+                    else:
+                        # NPM: npx package_name
+                        npm_match = re.search(r'npx\s+([^\s]+)', self.package_command)
+                        if npm_match:
+                            package_url = npm_match.group(1)
+                            print(f"   📦 从命令提取包名: {package_url}")
+                
+                # 准备降级描述（从项目信息中获取）
+                fallback_desc = None
+                if hasattr(self, 'project_path') and self.project_path:
+                    try:
+                        # 尝试读取 README 作为降级描述
+                        readme_path = self.project_path / "README.md"
+                        if not readme_path.exists():
+                            readme_path = self.project_path / "readme.md"
+                        if readme_path.exists():
+                            fallback_desc = readme_path.read_text(encoding='utf-8')[:2000]
+                            print(f"   📝 准备降级描述（从 README）: {len(fallback_desc)} 字符")
+                    except:
+                        pass
+                
+                # 如果没有 README，使用包名和项目类型
+                if not fallback_desc:
+                    fallback_desc = f"{package_url} - A {self.package_type or 'software'} package for MCP Server"
+                
+                # 获取 session_token（如果 EMCP 已登录）
+                session_token = None
+                if hasattr(self, 'emcp_manager') and self.emcp_manager and hasattr(self.emcp_manager, 'session_key'):
+                    session_token = self.emcp_manager.session_key
+                    if session_token:
+                        print(f"   🔑 使用 EMCP session token 进行上传认证")
+                
+                result = jimeng_client.generate_logo_from_package(
+                    package_url=package_url,
+                    emcp_base_url=emcp_base_url,
+                    fallback_description=fallback_desc,
+                    session_token=session_token
+                )
+                
+                if result and result.get('success'):
+                    self.logo_url = result.get('logo_url')
+                    print(f"✅ Logo 生成成功！")
+                    print(f"   Logo URL: {self.logo_url}")
+                    if result.get('local_file'):
+                        print(f"   本地文件: {result.get('local_file')}")
+                else:
+                    print(f"⚠️  Logo 生成失败，使用默认 Logo")
+                    self.logo_url = "https://emcp.kaleido.guru/logo/default-mcp-logo.png"
+                    
+            except Exception as e:
+                print(f"❌ Logo 生成出错: {e}")
+                import traceback
+                print(f"   {traceback.format_exc()}")
+                print(f"   使用默认 Logo")
+                self.logo_url = "https://emcp.kaleido.guru/logo/default-mcp-logo.png"
+        else:
+            print(f"⚠️  无法初始化即梦客户端，使用默认 Logo")
+            self.logo_url = "https://emcp.kaleido.guru/logo/default-mcp-logo.png"
+        
         print(f"✅ 步骤完成\n")
     
     def step_publish_emcp(self):
@@ -667,17 +870,27 @@ class WorkflowExecutor:
                     "name_zh_cn": self.package_name,
                     "name_zh_tw": self.package_name,
                     "name_en": self.package_name,
-                    "description_zh_cn": f"{self.package_name} MCP服务器",
-                    "description_zh_tw": f"{self.package_name} MCP伺服器",
-                    "description_en": f"{self.package_name} MCP Server"
+                    "summary_zh_cn": f"{self.package_name} MCP服务器",  # ✅ 摘要字段
+                    "summary_zh_tw": f"{self.package_name} MCP伺服器",
+                    "summary_en": f"{self.package_name} MCP Server",
+                    "description_zh_cn": f"{self.package_name} 是一个功能强大的 MCP 服务器",  # ✅ 描述字段
+                    "description_zh_tw": f"{self.package_name} 是一個功能強大的 MCP 伺服器",
+                    "description_en": f"{self.package_name} is a powerful MCP Server"
                 }
             
             print(f"\n📝 获取EMCP平台配置...")
             
-            # 获取 Logo URL - 优先使用AI生成的Logo，否则使用默认
-            logo_url = self.template_data.get("logo_url")
-            if logo_url:
-                print(f"🖼️ 使用已生成的Logo: {logo_url}")
+            # 获取 Logo URL - 优先使用生成的Logo，否则使用默认
+            # 1. 首先检查 self.logo_url（从 step_generate_logo 设置）
+            # 2. 其次检查 template_data 中的 logo_url
+            # 3. 最后使用默认 logo
+            logo_url = None
+            if hasattr(self, 'logo_url') and self.logo_url:
+                logo_url = self.logo_url
+                print(f"🖼️ 使用生成的Logo: {logo_url[:80]}...")
+            elif self.template_data.get("logo_url"):
+                logo_url = self.template_data.get("logo_url")
+                print(f"🖼️ 使用模板中的Logo: {logo_url}")
             else:
                 logo_url = "https://emcp.kaleido.guru/logo/default-mcp-logo.png"
                 print(f"🖼️ 使用默认Logo: {logo_url}")
@@ -741,8 +954,8 @@ class WorkflowExecutor:
             # 使用build_template_data构建完整数据
             full_template_data = emcp_mgr.build_template_data(
                 name=self.template_data.get("name_zh_cn", self.package_name),
-                summary=self.template_data.get("description_zh_cn", f"{self.package_name} MCP服务器"),
-                description=self.template_data.get("description_zh_cn", f"{self.package_name} MCP服务器"),
+                summary=self.template_data.get("summary_zh_cn", f"{self.package_name} MCP服务器"),  # ✅ 使用摘要字段
+                description=self.template_data.get("description_zh_cn", f"{self.package_name} MCP服务器"),  # ✅ 使用描述字段
                 logo_url=logo_url,  # 使用AI生成的Logo或默认Logo
                 template_category_id=template_category_id,  # 使用获取的分类ID
                 template_source_id=self.package_name,  # 使用包名作为来源ID
@@ -751,11 +964,11 @@ class WorkflowExecutor:
                 package_type=self._get_package_type_code(),  # 根据类型获取代码
                 args=args_list,  # ✅ 添加环境变量配置
                 name_en=self.template_data.get("name_en", self.package_name),
-                summary_en=self.template_data.get("description_en", f"{self.package_name} MCP Server"),
-                description_en=self.template_data.get("description_en", f"{self.package_name} MCP Server"),
+                summary_en=self.template_data.get("summary_en", f"{self.package_name} MCP Server"),  # ✅ 使用摘要字段
+                description_en=self.template_data.get("description_en", f"{self.package_name} MCP Server"),  # ✅ 使用描述字段
                 name_tw=self.template_data.get("name_zh_tw", self.package_name),
-                summary_tw=self.template_data.get("description_zh_tw", f"{self.package_name} MCP伺服器"),
-                description_tw=self.template_data.get("description_zh_tw", f"{self.package_name} MCP伺服器")
+                summary_tw=self.template_data.get("summary_zh_tw", f"{self.package_name} MCP伺服器"),  # ✅ 使用摘要字段
+                description_tw=self.template_data.get("description_zh_tw", f"{self.package_name} MCP伺服器")  # ✅ 使用描述字段
             )
             
             print(f"📦 包名: {self.package_name}")
@@ -820,13 +1033,29 @@ class WorkflowExecutor:
             return
         
         print(f"🆔 模板ID: {self.template_id}")
-        print(f"🧪 开始测试 MCP 工具...")
         
         try:
             # 复用EMCP管理器
             if not self.emcp_manager or not self.emcp_manager.session_key:
                 print(f"⚠️ EMCP未登录，跳过MCP测试")
                 return
+            
+            # ⭐ 步骤 0: 检查包是否已发布到包源
+            print(f"\n📦 步骤 0: 检查包是否已发布到包源...")
+            print(f"   包名: {self.package_name}")
+            print(f"   包类型: {self.package_type}")
+            
+            if not self._wait_for_package_published(max_wait_seconds=60):
+                print(f"\n❌ 包未发布到包源，无法启动 MCP 服务器")
+                print(f"💡 可能的原因：")
+                print(f"   1. GitHub Actions 还在运行中")
+                print(f"   2. 发布过程出现错误")
+                print(f"   3. 包名不正确")
+                print(f"\n⏸️ 终止测试流程")
+                raise Exception(f"包 {self.package_name} 未发布到 {self.package_type} 包源，无法测试")
+            
+            print(f"✅ 包已发布，可以开始测试")
+            print(f"\n🧪 开始测试 MCP 工具...")
             
             emcp_mgr = self.emcp_manager
             user_id = emcp_mgr.user_info.get('uid', 51)
@@ -1028,6 +1257,13 @@ class WorkflowExecutor:
             chat_tester.set_log_function(print)
             
             # 执行对话测试
+            # ⭐ 传递 AI generator（如果配置了的话）
+            ai_gen_for_test = getattr(self, 'ai_generator', None)
+            if ai_gen_for_test:
+                print(f"🤖 使用 AI 生成测试问题")
+            else:
+                print(f"💡 使用智能降级方案生成测试问题")
+            
             report = chat_tester.test_conversation_with_tools(
                 agent_token=agent_client.session_key,
                 conversation_id=conversation_id,
@@ -1038,7 +1274,7 @@ class WorkflowExecutor:
                 emcp_base_url=self.emcp_manager.base_url,
                 emcp_token=self.emcp_manager.session_key,
                 emcp_manager=self.emcp_manager,
-                ai_generator=None
+                ai_generator=ai_gen_for_test  # ⭐ 传递 AI generator
             )
             
             if report and report.get('success'):

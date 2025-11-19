@@ -150,7 +150,8 @@ class JimengLogoGenerator:
         package_url: str,
         emcp_base_url: str = "https://sit-emcp.kaleido.guru",
         use_v40: bool = True,
-        fallback_description: str = None
+        fallback_description: str = None,
+        session_token: str = None
     ) -> Dict:
         """
         从包地址生成 Logo 并上传到 EMCP
@@ -160,6 +161,7 @@ class JimengLogoGenerator:
             emcp_base_url: EMCP 平台地址
             use_v40: 是否使用即梦 4.0 (推荐)
             fallback_description: 降级描述（当包不存在时使用）
+            session_token: EMCP 会话 token（可选，用于上传认证）
         
         Returns:
             {
@@ -243,7 +245,7 @@ class JimengLogoGenerator:
             # 步骤 5: 尝试上传到 EMCP (可选)
             print(f"\n⬆️ 步骤 5/5: 上传到 EMCP (可选)...")
             
-            emcp_logo_url = self._upload_to_emcp(jimeng_image_url, emcp_base_url)
+            emcp_logo_url = self._upload_to_emcp(jimeng_image_url, emcp_base_url, session_token)
             
             if emcp_logo_url:
                 print(f"✅ EMCP URL: {emcp_logo_url}")
@@ -449,13 +451,15 @@ class JimengLogoGenerator:
             print(f"   ❌ 保存失败: {e}")
             return None
     
-    def _upload_to_emcp(self, image_url: str, base_url: str) -> Optional[str]:
+    def _upload_to_emcp(self, image_url: str, base_url: str, session_token: str = None, retry_on_401: bool = True) -> Optional[str]:
         """
-        下载图片并上传到 EMCP
+        下载图片并上传到 EMCP（支持401自动重试）
         
         Args:
             image_url: 即梦图片 URL
             base_url: EMCP 平台地址
+            session_token: EMCP 会话 token（可选，用于认证）
+            retry_on_401: 遇到401时是否自动登录重试
         
         Returns:
             EMCP logo URL (如 /api/proxyStorage/NoAuth/xxx.png)
@@ -477,13 +481,66 @@ class JimengLogoGenerator:
                 'file': ('logo.png', image_data, 'image/png')
             }
             
+            # 添加 token header (如果提供了)
+            headers = {}
+            if session_token:
+                headers['token'] = session_token
+            
             print(f"   📤 上传文件流到 EMCP...")
             print(f"      URL: {upload_url}")
             print(f"      文件名: logo.png")
             print(f"      大小: {len(image_data):,} 字节")
+            if session_token:
+                print(f"      认证: 使用 session token")
             
             # 发送 multipart/form-data 请求
-            response = requests.post(upload_url, files=files, timeout=30)
+            response = requests.post(upload_url, files=files, headers=headers, timeout=30)
+            
+            # 检查 401 错误
+            if response.status_code == 401 and retry_on_401:
+                print(f"   ⚠️ 收到 401 Unauthorized - Token 可能已过期或未登录")
+                print(f"   🔄 尝试登录 EMCP 并重试...")
+                
+                try:
+                    from src.unified_config_manager import UnifiedConfigManager
+                    config_mgr = UnifiedConfigManager()
+                    emcp_config = config_mgr.get_emcp_config()
+                    
+                    if not emcp_config.get("phone_number"):
+                        print(f"   ❌ 未配置 EMCP 账号，无法自动登录")
+                        return None
+                    
+                    # 登录获取新 token
+                    login_url = f"{base_url}/api/Login/login"
+                    login_data = {
+                        "phone_number": emcp_config['phone_number'],
+                        "validation_code": emcp_config['validation_code']
+                    }
+                    
+                    print(f"   📱 登录: {emcp_config['phone_number']}")
+                    login_resp = requests.post(login_url, json=login_data, timeout=30)
+                    login_resp.raise_for_status()
+                    login_result = login_resp.json()
+                    
+                    if login_result.get('err_code') == 0:
+                        new_token = login_result['body']['session_key']
+                        print(f"   ✅ 登录成功，获得新 token")
+                        
+                        # 使用新 token 重试上传
+                        return self._upload_to_emcp(
+                            image_url=image_url,
+                            base_url=base_url,
+                            session_token=new_token,
+                            retry_on_401=False  # 避免无限重试
+                        )
+                    else:
+                        print(f"   ❌ 登录失败: {login_result.get('err_message')}")
+                        return None
+                        
+                except Exception as e:
+                    print(f"   ❌ 自动登录失败: {e}")
+                    return None
+            
             response.raise_for_status()
             
             data = response.json()
@@ -506,13 +563,24 @@ class JimengLogoGenerator:
 def main():
     """主函数 - 命令行使用示例"""
     import sys
+    from src.unified_config_manager import UnifiedConfigManager
     
-    # 即梦 MCP 配置
+    # 从配置文件读取即梦 MCP 配置
+    config_mgr = UnifiedConfigManager()
+    jimeng_cfg = config_mgr.get_jimeng_config()
+    
+    if not jimeng_cfg.get("emcp_key") or not jimeng_cfg.get("emcp_usercode"):
+        print("❌ 错误：请先在配置文件中设置 jimeng.emcp_key 和 jimeng.emcp_usercode")
+        print("   配置文件位置：config.json")
+        print("   参考模板：config_template.json")
+        sys.exit(1)
+    
+    # 构建即梦 MCP 配置
     jimeng_config = {
-        "base_url": "http://mcptest013.sitmcp.kaleido.guru/sse",
+        "base_url": jimeng_cfg.get("mcp_url", "http://mcptest013.sitmcp.kaleido.guru/sse"),
         "headers": {
-            "emcp-key": "PI1EQcsELJ7uPJnL3VNS89UaNIgRkL8n",
-            "emcp-usercode": "VGSdDTgj"
+            "emcp-key": jimeng_cfg.get("emcp_key"),
+            "emcp-usercode": jimeng_cfg.get("emcp_usercode")
         }
     }
     
