@@ -4,7 +4,7 @@
 """
 
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import sys
 
 from src.github_manager import GitHubManager
@@ -19,6 +19,7 @@ from src.mcp_tester import MCPTester
 from src.agent_tester import AgentTester
 from src.signalr_chat_tester import SignalRChatTester
 from src.unified_config_manager import UnifiedConfigManager
+from src.repo_cloner import RepoCloner
 
 
 class WorkflowExecutor:
@@ -282,9 +283,9 @@ class WorkflowExecutor:
             
             # 根据包类型检查
             result = None
-            if self.package_type == 'pypi':
+            if self.package_type in ['pypi', 'python']:
                 result = fetcher.fetch_pypi(self.package_name)
-            elif self.package_type == 'npm':
+            elif self.package_type in ['npm', 'node.js', 'node']:
                 result = fetcher.fetch_npm(self.package_name)
             elif self.package_type == 'docker':
                 result = fetcher.fetch_docker(self.package_name)
@@ -368,14 +369,31 @@ class WorkflowExecutor:
         detector = ProjectDetector(self.project_path)
         project_info = detector.detect()
         
-        # 优先使用检测到的包名，如果没有则使用仓库名
+        # ⭐ 包名管理逻辑
+        # 优先级：已设置的包名 > 仓库名 > ProjectDetector 检测结果
+        
         detected_package_name = project_info.get('package_name')
-        if detected_package_name:
-            self.package_name = detected_package_name
-            print(f"📦 检测到包名: {self.package_name}")
-        else:
+        
+        print(f"\n🔍 包名检测:")
+        print(f"   当前包名: {getattr(self, 'package_name', 'None')}")
+        print(f"   仓库名: {getattr(self, 'repo_name', 'None')}")
+        print(f"   ProjectDetector 检测: {detected_package_name}")
+        
+        # 如果已经有包名（从克隆流程或外部设置），优先使用它
+        if hasattr(self, 'package_name') and self.package_name:
+            print(f"📦 使用已设置的包名: {self.package_name} ✓")
+            # 不要覆盖！即使 ProjectDetector 检测到不同的值
+        elif hasattr(self, 'repo_name') and self.repo_name:
+            # 如果有仓库名，使用仓库名（通常是修改后的正确包名）
             self.package_name = self.repo_name
-            print(f"📦 包名（使用仓库名）: {self.package_name}")
+            print(f"📦 使用仓库名作为包名: {self.package_name}")
+        elif detected_package_name:
+            # 最后才使用 ProjectDetector 检测的包名
+            self.package_name = detected_package_name
+            print(f"📦 使用检测到的包名: {self.package_name}")
+        else:
+            # 如果都没有，报错
+            raise Exception("无法确定包名")
         
         # 从 README 提取命令
         detected_command = project_info.get('command')
@@ -387,6 +405,220 @@ class WorkflowExecutor:
         
         print(f"🔧 项目类型: {self.package_type}")
         print(f"✅ 步骤完成\n")
+    
+    def _filter_readme_for_emcp(self, readme_content: str, ai_generator=None, language='zh-cn') -> str:
+        """
+        过滤 README 内容，优化为 EMCP 描述格式
+        
+        保留：
+        1. 项目标题（去掉多语言链接）
+        2. 简介（用 AI 生成简短版本，不提技术细节）
+        3. 工具列表（保持原语言）
+        
+        过滤掉：EMCP 引流、多语言切换文字、安装、运行、配置、开发等章节
+        
+        Args:
+            readme_content: 原始 README 内容（已经是对应语言的内容）
+            ai_generator: AI 生成器（可选，用于生成简介）
+            language: 语言代码（zh-cn, zh-tw, en）
+            
+        Returns:
+            str: 过滤后的内容（保持原语言）
+        """
+        import re
+        
+        # 去掉多语言切换文字
+        readme_content = re.sub(r'\[?English\]?\(.*?\)?\s*\|\s*\[?简体中文\]?\(.*?\)?\s*\|\s*\[?繁體中文\]?\(.*?\)?', '', readme_content)
+        readme_content = re.sub(r'\[?English\]?\s*\|\s*\[?简体中文\]?\s*\|\s*\[?繁體中文\]?', '', readme_content)
+        readme_content = re.sub(r'English\s*\|\s*\[简体中文\]\(.*?\)\s*\|\s*\[繁體中文\]\(.*?\)', '', readme_content)
+        
+        # 将内容按章节分割
+        sections = {}
+        current_section = 'header'
+        current_content = []
+        
+        lines = readme_content.split('\n')
+        
+        for line in lines:
+            # 检测二级标题
+            heading_match = re.match(r'^##\s+(.+)$', line)
+            
+            if heading_match:
+                # 保存上一个章节
+                if current_content:
+                    sections[current_section] = '\n'.join(current_content)
+                
+                # 开始新章节
+                title = heading_match.group(1).strip()
+                current_section = title
+                current_content = [line]
+            else:
+                current_content.append(line)
+        
+        # 保存最后一个章节
+        if current_content:
+            sections[current_section] = '\n'.join(current_content)
+        
+        # 需要排除的章节关键词（多语言）
+        exclude_keywords = [
+            '使用 EMCP 平台', 'Quick Start with EMCP', '使用 EMCP 平臺',  # EMCP 引流
+            '安装', 'Installation', '安裝',  # 安装
+            '运行', 'Running', '運行', 'Run',  # 运行
+            '配置', 'Configuration', '配置',  # 配置
+            '开发', 'Development', '開發',  # 开发
+            'Claude Desktop',  # Claude Desktop 配置
+            '技术栈', 'Tech Stack', 'Technology Stack', '技術棧',  # 技术栈
+        ]
+        
+        # 构建新的 README
+        result_parts = []
+        
+        # 1. 保留标题（去掉多语言链接）
+        if 'header' in sections:
+            header = sections['header'].strip()
+            # 去掉标题中的多语言链接
+            header = re.sub(r'\[English\]\(.*?\)', '', header)
+            header = re.sub(r'\[简体中文\]\(.*?\)', '', header)
+            header = re.sub(r'\[繁體中文\]\(.*?\)', '', header)
+            header = header.replace('English |', '').replace('| 简体中文', '').replace('| 繁體中文', '').strip()
+            # 清理多余的分隔符
+            header = re.sub(r'\s*\|\s*$', '', header)
+            header = re.sub(r'^\s*\|\s*', '', header)
+            if header:
+                result_parts.append(header)
+        
+        # 2. 遍历所有章节，只保留需要的
+        for section_key, section_content in sections.items():
+            if section_key == 'header':
+                continue
+            
+            # 检查是否需要排除
+            should_exclude = False
+            for keyword in exclude_keywords:
+                if keyword in section_key:
+                    should_exclude = True
+                    break
+            
+            if should_exclude:
+                continue
+            
+            # 保留简介和工具列表章节
+            is_intro = any(kw in section_key for kw in ['简介', 'Introduction', '簡介', '介绍', 'Overview'])
+            is_tools = any(kw in section_key for kw in ['可用工具', 'Available Tools', '工具'])
+            
+            if is_intro:
+                # 简介章节：用 AI 优化
+                intro_lines = section_content.split('\n')[1:]  # 跳过标题行
+                intro_text = '\n'.join(intro_lines).strip()
+                
+                # 去掉技术细节
+                intro_text = re.sub(r'使用\s*\[?FastMCP\]?\(.*?\)\s*自动生成.*?。', '', intro_text, flags=re.IGNORECASE)
+                intro_text = re.sub(r'This is an automatically generated.*?using\s*\[?FastMCP\]?\(.*?\).*?\.', '', intro_text, flags=re.IGNORECASE)
+                intro_text = re.sub(r'這是一個使用\s*\[?FastMCP\]?\(.*?\)\s*自動生成.*?。', '', intro_text, flags=re.IGNORECASE)
+                intro_text = re.sub(r'FastMCP', '', intro_text, flags=re.IGNORECASE)
+                
+                # 如果有 AI，生成简短版本
+                if ai_generator and hasattr(ai_generator, 'client'):
+                    try:
+                        print(f"   🤖 使用 AI 生成简短简介 ({language})...")
+                        
+                        # 根据语言设置提示词
+                        if language == 'en':
+                            system_prompt = """You are a technical documentation expert. Write a clear, practical introduction (150-200 words) that explains:
+1. What this MCP server does (main functionality)
+2. What APIs/services it provides access to
+3. What users can do with it (practical use cases)
+4. Key features or capabilities
+
+Do NOT mention:
+- 'FastMCP' or any framework names
+- 'automatically generated'
+- Technical implementation details
+- Installation or setup instructions
+
+Focus on VALUE and FUNCTIONALITY. Write in a way that helps users understand if this tool is useful for them.
+Output only the introduction text, no explanations."""
+                            intro_title = "## Introduction"
+                        elif language == 'zh-tw':
+                            system_prompt = """你是技術文檔專家。請撰寫清晰、實用的簡介（150-200字），說明：
+1. 這個 MCP 伺服器做什麼（主要功能）
+2. 它提供哪些 API/服務的存取
+3. 使用者可以用它做什麼（實際用途）
+4. 關鍵特性或能力
+
+不要提及：
+- 「FastMCP」或任何框架名稱
+- 「自動生成」
+- 技術實作細節
+- 安裝或設定說明
+
+聚焦於價值和功能。用能幫助使用者了解這個工具是否有用的方式撰寫。
+只輸出簡介文字，不要額外說明。"""
+                            intro_title = "## 簡介"
+                        else:
+                            system_prompt = """你是技术文档专家。请撰写清晰、实用的简介（150-200字），说明：
+1. 这个 MCP 服务器做什么（主要功能）
+2. 它提供哪些 API/服务的访问
+3. 用户可以用它做什么（实际用途）
+4. 关键特性或能力
+
+不要提及：
+- 「FastMCP」或任何框架名称
+- 「自动生成」
+- 技术实现细节
+- 安装或设置说明
+
+聚焦于价值和功能。用能帮助用户了解这个工具是否有用的方式撰写。
+只输出简介文字，不要额外说明。"""
+                            intro_title = "## 简介"
+                        
+                        messages = [
+                            {
+                                "role": "system",
+                                "content": system_prompt
+                            },
+                            {
+                                "role": "user",
+                                "content": intro_text[:800]
+                            }
+                        ]
+                        
+                        response = ai_generator.client.chat.completions.create(
+                            model=ai_generator.deployment_name,
+                            messages=messages,
+                            temperature=0.7,
+                            max_tokens=300
+                        )
+                        
+                        ai_intro = response.choices[0].message.content.strip()
+                        result_parts.append(f"{intro_title}\n\n{ai_intro}")
+                        print(f"   ✅ AI 生成简介: {len(ai_intro)} 字符")
+                    except Exception as e:
+                        print(f"   ⚠️ AI 生成失败，使用原文: {e}")
+                        # 降级：使用原文（已去掉技术细节）
+                        short_intro = intro_text[:150] + ('...' if len(intro_text) > 150 else '')
+                        result_parts.append(f"## 简介\n\n{short_intro}")
+                else:
+                    # 没有 AI：使用原文（已去掉技术细节）
+                    short_intro = intro_text[:150] + ('...' if len(intro_text) > 150 else '')
+                    result_parts.append(f"## 简介\n\n{short_intro}")
+            
+            elif is_tools:
+                # 工具列表章节：直接保留（保持原语言）
+                result_parts.append(section_content)
+        
+        # 组合结果
+        result = '\n\n'.join(result_parts)
+        
+        # 清理多余空行
+        result = re.sub(r'\n{3,}', '\n\n', result)
+        
+        # 限制总长度
+        max_length = 3000
+        if len(result) > max_length:
+            result = result[:max_length] + '\n\n...'
+        
+        return result.strip()
     
     def _load_multilang_readmes(self):
         """
@@ -416,8 +648,19 @@ class WorkflowExecutor:
                     if file_path.exists():
                         try:
                             content = file_path.read_text(encoding='utf-8')
-                            loaded_content[key] = content
-                            print(f"   ✅ 读取 {filename}: {len(content)} 字符")
+                            # 过滤 README 内容（传入 AI generator 和语言）
+                            ai_gen = getattr(self, 'ai_generator', None)
+                            
+                            # 根据 key 确定语言
+                            lang = 'zh-cn'
+                            if 'zh_tw' in key or 'ZH-TW' in filename:
+                                lang = 'zh-tw'
+                            elif 'en' in key or 'EN' in filename:
+                                lang = 'en'
+                            
+                            filtered_content = self._filter_readme_for_emcp(content, ai_gen, lang)
+                            loaded_content[key] = filtered_content
+                            print(f"   ✅ 读取 {filename} ({lang}): {len(content)} 字符 → 过滤后 {len(filtered_content)} 字符")
                             break
                         except Exception as e:
                             print(f"   ⚠️ 读取 {filename} 失败: {e}")
@@ -433,8 +676,19 @@ class WorkflowExecutor:
                     if file_path.exists():
                         try:
                             content = file_path.read_text(encoding='utf-8')
-                            loaded_content[key] = content
-                            print(f"   ✅ 读取 {filename}: {len(content)} 字符")
+                            # 过滤 README 内容（传入 AI generator 和语言）
+                            ai_gen = getattr(self, 'ai_generator', None)
+                            
+                            # 根据 key 确定语言
+                            lang = 'zh-cn'
+                            if 'zh_tw' in key or 'ZH-TW' in filename:
+                                lang = 'zh-tw'
+                            elif 'en' in key or 'EN' in filename:
+                                lang = 'en'
+                            
+                            filtered_content = self._filter_readme_for_emcp(content, ai_gen, lang)
+                            loaded_content[key] = filtered_content
+                            print(f"   ✅ 读取 {filename} ({lang}): {len(content)} 字符 → 过滤后 {len(filtered_content)} 字符")
                             break
                         except Exception as e:
                             print(f"   ⚠️ 读取 {filename} 失败: {e}")
@@ -488,7 +742,45 @@ class WorkflowExecutor:
             print(f"  繁体: {multilang_readmes.get('name_zh_tw', '')}")
             print(f"  英文: {multilang_readmes.get('name_en', '')}")
             
-            # 仍需检测环境变量
+            # 检测环境变量配置（如果还没有配置）
+            if not hasattr(self, 'env_vars_config') or not self.env_vars_config:
+                print(f"\n🔍 检测环境变量配置...")
+                from src.env_var_detector import EnvVarDetector
+                detector = EnvVarDetector()
+                env_vars = detector.detect_from_project(self.project_path)
+                
+                if env_vars:
+                    print(f"   发现 {len(env_vars)} 个环境变量需要配置")
+                    for var in env_vars:
+                        required_text = "必需" if var['required'] else "可选"
+                        print(f"   - {var['name']}: {var['description']} ({required_text})")
+                    
+                    from src.env_var_dialog import EnvVarDialog
+                    import tkinter as tk
+                    root = self.parent if hasattr(self, 'parent') else tk._default_root
+                    dialog = EnvVarDialog(root, env_vars, self.package_name)
+                    configured_vars = dialog.show()
+                    
+                    if not configured_vars:
+                        print(f"❌ 用户取消了环境变量配置")
+                        raise Exception("必须配置环境变量才能发布到 EMCP")
+                    
+                    self.env_vars_config = configured_vars
+                    print(f"✅ 用户已配置 {len(configured_vars)} 个环境变量")
+                else:
+                    print(f"   ✅ 未检测到需要配置的环境变量")
+                    self.env_vars_config = []
+            else:
+                print(f"\n✅ 使用预配置的环境变量 ({len(self.env_vars_config)} 个)")
+            
+            print(f"✅ 步骤完成\n")
+            return
+        
+        # 如果没有找到 README 文件，继续原有的 AI 生成流程
+        print(f"ℹ️ 未找到多语言 README 文件，使用 AI 生成")
+        
+        # 检测环境变量配置需求（如果还没有配置）
+        if not hasattr(self, 'env_vars_config') or not self.env_vars_config:
             print(f"\n🔍 检测环境变量配置...")
             from src.env_var_detector import EnvVarDetector
             detector = EnvVarDetector()
@@ -500,9 +792,15 @@ class WorkflowExecutor:
                     required_text = "必需" if var['required'] else "可选"
                     print(f"   - {var['name']}: {var['description']} ({required_text})")
                 
+                # 弹出对话框让用户确认/修改
+                print(f"\n💡 请在弹出的对话框中填写环境变量说明...")
+                
                 from src.env_var_dialog import EnvVarDialog
                 import tkinter as tk
+                
+                # 找到主窗口
                 root = self.parent if hasattr(self, 'parent') else tk._default_root
+                
                 dialog = EnvVarDialog(root, env_vars, self.package_name)
                 configured_vars = dialog.show()
                 
@@ -510,52 +808,14 @@ class WorkflowExecutor:
                     print(f"❌ 用户取消了环境变量配置")
                     raise Exception("必须配置环境变量才能发布到 EMCP")
                 
+                # 保存配置的环境变量
                 self.env_vars_config = configured_vars
                 print(f"✅ 用户已配置 {len(configured_vars)} 个环境变量")
             else:
                 print(f"   ✅ 未检测到需要配置的环境变量")
                 self.env_vars_config = []
-            
-            print(f"✅ 步骤完成\n")
-            return
-        
-        # 如果没有找到 README 文件，继续原有的 AI 生成流程
-        print(f"ℹ️ 未找到多语言 README 文件，使用 AI 生成")
-        
-        # 检测环境变量配置需求
-        print(f"\n🔍 检测环境变量配置...")
-        from src.env_var_detector import EnvVarDetector
-        detector = EnvVarDetector()
-        env_vars = detector.detect_from_project(self.project_path)
-        
-        if env_vars:
-            print(f"   发现 {len(env_vars)} 个环境变量需要配置")
-            for var in env_vars:
-                required_text = "必需" if var['required'] else "可选"
-                print(f"   - {var['name']}: {var['description']} ({required_text})")
-            
-            # 弹出对话框让用户确认/修改
-            print(f"\n💡 请在弹出的对话框中填写环境变量说明...")
-            
-            from src.env_var_dialog import EnvVarDialog
-            import tkinter as tk
-            
-            # 找到主窗口
-            root = self.parent if hasattr(self, 'parent') else tk._default_root
-            
-            dialog = EnvVarDialog(root, env_vars, self.package_name)
-            configured_vars = dialog.show()
-            
-            if not configured_vars:
-                print(f"❌ 用户取消了环境变量配置")
-                raise Exception("必须配置环境变量才能发布到 EMCP")
-            
-            # 保存配置的环境变量
-            self.env_vars_config = configured_vars
-            print(f"✅ 用户已配置 {len(configured_vars)} 个环境变量")
         else:
-            print(f"   ✅ 未检测到需要配置的环境变量")
-            self.env_vars_config = []
+            print(f"\n✅ 使用预配置的环境变量 ({len(self.env_vars_config)} 个)")
         
         ai_config = self.config.get("azure_openai", {})
         
@@ -750,64 +1010,117 @@ class WorkflowExecutor:
                 emcp_config = self.config_mgr.get_emcp_config()
                 emcp_base_url = emcp_config.get("base_url", "https://sit-emcp.kaleido.guru")
                 
-                # 尝试从命令中提取完整包名（带前缀）
-                package_url = self.package_name
-                if self.package_command:
-                    # 从命令中提取包名，例如 "uvx --from bach-xxx" 或 "npx @org/xxx"
-                    import re
-                    # PyPI: uvx --from package_name
-                    pypi_match = re.search(r'uvx\s+--from\s+([^\s@]+)', self.package_command)
-                    if pypi_match:
-                        package_url = pypi_match.group(1)
-                        print(f"   📦 从命令提取包名: {package_url}")
-                    else:
-                        # NPM: npx package_name
-                        npm_match = re.search(r'npx\s+([^\s]+)', self.package_command)
-                        if npm_match:
-                            package_url = npm_match.group(1)
-                            print(f"   📦 从命令提取包名: {package_url}")
+                # 准备 Logo 描述（使用 MCP 模板描述，不要查询包源）
+                logo_description = None
                 
-                # 准备降级描述（从项目信息中获取）
-                fallback_desc = None
-                if hasattr(self, 'project_path') and self.project_path:
+                # 优先使用已生成的 EMCP 描述（更准确）
+                if hasattr(self, 'template_data') and self.template_data:
+                    # 使用中文描述
+                    desc_zh = self.template_data.get('description_zh_cn', '')
+                    if desc_zh:
+                        logo_description = desc_zh
+                        print(f"   📝 使用 MCP 模板描述: {len(logo_description)} 字符")
+                
+                # 如果没有 EMCP 描述，从 README 读取
+                if not logo_description and hasattr(self, 'project_path') and self.project_path:
                     try:
-                        # 尝试读取 README 作为降级描述
-                        readme_path = self.project_path / "README.md"
+                        readme_path = self.project_path / "mcp" / "README.md"
+                        if not readme_path.exists():
+                            readme_path = self.project_path / "README.md"
                         if not readme_path.exists():
                             readme_path = self.project_path / "readme.md"
                         if readme_path.exists():
-                            fallback_desc = readme_path.read_text(encoding='utf-8')[:2000]
-                            print(f"   📝 准备降级描述（从 README）: {len(fallback_desc)} 字符")
-                    except:
-                        pass
+                            logo_description = readme_path.read_text(encoding='utf-8')
+                            print(f"   📝 从 README 读取: {len(logo_description)} 字符")
+                    except Exception as e:
+                        print(f"   ⚠️ 读取 README 失败: {e}")
                 
-                # 如果没有 README，使用包名和项目类型
-                if not fallback_desc:
-                    fallback_desc = f"{package_url} - A {self.package_type or 'software'} package for MCP Server"
+                # 最后的降级：使用包名
+                if not logo_description:
+                    logo_description = f"{self.package_name} - MCP Server for {self.package_type or 'software'} package"
+                    print(f"   📝 使用默认描述")
                 
-                # 获取 session_token（如果 EMCP 已登录）
-                session_token = None
-                if hasattr(self, 'emcp_manager') and self.emcp_manager and hasattr(self.emcp_manager, 'session_key'):
-                    session_token = self.emcp_manager.session_key
-                    if session_token:
-                        print(f"   🔑 使用 EMCP session token 进行上传认证")
+                # 构建 Logo 提示词
+                print(f"\n🎯 构建 Logo 提示词...")
                 
-                result = jimeng_client.generate_logo_from_package(
-                    package_url=package_url,
-                    emcp_base_url=emcp_base_url,
-                    fallback_description=fallback_desc,
-                    session_token=session_token
-                )
+                # 清理描述（移除 Markdown 标记）
+                import re
+                clean_desc = logo_description
+                clean_desc = re.sub(r'#+\s*', '', clean_desc)  # 移除标题标记
+                clean_desc = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', clean_desc)  # 移除链接但保留文字
+                clean_desc = re.sub(r'```.*?```', '', clean_desc, flags=re.DOTALL)  # 移除代码块
+                clean_desc = re.sub(r'\*\*([^\*]+)\*\*', r'\1', clean_desc)  # 移除粗体标记
+                clean_desc = re.sub(r'\*([^\*]+)\*', r'\1', clean_desc)  # 移除斜体标记
+                clean_desc = clean_desc.strip()
                 
-                if result and result.get('success'):
-                    self.logo_url = result.get('logo_url')
-                    print(f"✅ Logo 生成成功！")
-                    print(f"   Logo URL: {self.logo_url}")
-                    if result.get('local_file'):
-                        print(f"   本地文件: {result.get('local_file')}")
-                else:
+                # 限制长度
+                if len(clean_desc) > 500:
+                    clean_desc = clean_desc[:500] + '...'
+                
+                # 根据包类型选择设计元素
+                type_elements = {
+                    'python': 'Python、代码、蓝黄配色',
+                    'pypi': 'Python、代码、蓝黄配色',
+                    'node.js': 'JavaScript、Node.js、绿色',
+                    'npm': 'JavaScript、Node.js、绿色',
+                    'docker': '容器、鲸鱼、蓝色'
+                }
+                elements = type_elements.get(self.package_type or 'unknown', '代码、工具、科技')
+                
+                # 构建提示词
+                prompt = f"""{self.package_name} Logo 设计
+
+一个专业的 MCP 服务器标志
+
+包描述：
+{clean_desc}
+
+设计要求：
+- 主题：{elements}
+- 风格：扁平化、现代、简洁、专业
+- 布局：方形图标，适合作为软件图标
+- 配色：专业的配色方案，2-3种颜色
+- 要求：干净清晰的现代科技 logo，适合 MCP 服务器标识使用"""
+                
+                print(f"   提示词长度: {len(prompt)} 字符")
+                print(f"   包名: {self.package_name}")
+                print(f"   类型: {self.package_type}")
+                print(f"   设计元素: {elements}")
+                
+                # 直接调用即梦生成 Logo（不查询包源）
+                print(f"\n🎨 调用即梦 MCP 生成...")
+                
+                jimeng_image_url = jimeng_client._generate_with_jimeng(prompt, use_v40=True)
+                
+                if not jimeng_image_url:
                     print(f"⚠️  Logo 生成失败，使用默认 Logo")
                     self.logo_url = "https://emcp.kaleido.guru/logo/default-mcp-logo.png"
+                else:
+                    print(f"✅ 即梦生成成功")
+                    
+                    # 下载并保存到本地
+                    print(f"\n💾 下载并保存 Logo...")
+                    local_file = jimeng_client._save_logo_locally(jimeng_image_url, self.package_name)
+                    
+                    if local_file:
+                        print(f"✅ 本地文件: {local_file}")
+                    
+                    # 上传到 EMCP
+                    print(f"\n⬆️ 上传到 EMCP...")
+                    session_token = None
+                    if hasattr(self, 'emcp_manager') and self.emcp_manager and hasattr(self.emcp_manager, 'session_key'):
+                        session_token = self.emcp_manager.session_key
+                    
+                    emcp_logo_url = jimeng_client._upload_to_emcp(jimeng_image_url, emcp_base_url, session_token)
+                    
+                    if emcp_logo_url:
+                        self.logo_url = emcp_logo_url
+                        print(f"✅ EMCP URL: {emcp_logo_url}")
+                    else:
+                        self.logo_url = jimeng_image_url
+                        print(f"⚠️ EMCP 上传失败，使用即梦 URL")
+                    
+                    print(f"✅ Logo URL: {self.logo_url}")
                     
             except Exception as e:
                 print(f"❌ Logo 生成出错: {e}")
@@ -854,7 +1167,10 @@ class WorkflowExecutor:
                 print(f"📱 手机号: {phone}")
                 print(f"🔑 验证码: {code}")
                 
-                user_info = emcp_mgr.login(phone, code)
+                # 获取备用 token（如果有）
+                fallback_token = emcp_config.get('fallback_token', 'd303fc3a-ff8c-422f-afb8-6fc02d685ee2')
+                
+                user_info = emcp_mgr.login(phone, code, fallback_token=fallback_token)
                 
                 print(f"✅ 登录成功")
                 print(f"👤 用户: {user_info.get('user_name', 'Unknown')}")
@@ -1044,6 +1360,12 @@ class WorkflowExecutor:
             print(f"\n📦 步骤 0: 检查包是否已发布到包源...")
             print(f"   包名: {self.package_name}")
             print(f"   包类型: {self.package_type}")
+            print(f"   仓库名: {self.repo_name}")
+            
+            # ⚠️ 如果包名和仓库名不一致，发出警告
+            if hasattr(self, 'repo_name') and self.package_name != self.repo_name:
+                print(f"   ⚠️ 警告：包名与仓库名不一致！")
+                print(f"      这可能导致查询错误的包")
             
             if not self._wait_for_package_published(max_wait_seconds=60):
                 print(f"\n❌ 包未发布到包源，无法启动 MCP 服务器")
@@ -1306,6 +1628,264 @@ class WorkflowExecutor:
             print(f"⚠️ 对话测试失败: {str(e)}")
             print(f"详细错误:\n{traceback.format_exc()}")
             print(f"ℹ️ 跳过测试，继续执行")
+        
+        print(f"✅ 步骤完成\n")
+    
+    # ===== 克隆和发布工作流程 =====
+    
+    def workflow_clone_and_publish(
+        self,
+        github_url: str,
+        prefix: str = "bachai",
+        output_dir: Optional[Path] = None
+    ) -> Dict:
+        """
+        完整的克隆和发布工作流程
+        
+        1. 克隆GitHub仓库
+        2. 修改包名（添加前缀）
+        3. 上传到组织的GitHub
+        4. 生成CI/CD流水线
+        5. 推送代码（立即触发打包发布）
+        6. 等待包发布
+        7. 发布到EMCP
+        8. 可选：运行测试
+        
+        Args:
+            github_url: 要克隆的GitHub仓库URL
+            prefix: 包名前缀，默认为 "bachai"
+            output_dir: 输出目录（可选）
+            
+        Returns:
+            Dict: 工作流程执行结果
+        """
+        print(f"\n{'='*70}")
+        print(f"🚀 开始克隆和发布工作流程")
+        print(f"{'='*70}")
+        print(f"🔗 源仓库: {github_url}")
+        print(f"🏷️  包名前缀: {prefix}")
+        
+        cloner = None
+        result = {
+            'success': False,
+            'steps_completed': [],
+            'errors': []
+        }
+        
+        try:
+            # ===== 步骤 1: 克隆并修改包名 =====
+            self.update_progress(5)
+            cloner = RepoCloner(prefix=prefix)
+            clone_result = cloner.clone_and_modify(github_url, output_dir, prefix)
+            
+            if not clone_result['success']:
+                raise Exception(f"克隆失败: {clone_result.get('error', '未知错误')}")
+            
+            result['steps_completed'].append('clone')
+            
+            # 设置项目信息
+            repo_path = clone_result['repo_path']
+            new_package_name = clone_result['new_package_name']
+            project_type = clone_result['project_type']
+            
+            self.project_path = repo_path
+            self.package_name = new_package_name
+            self.package_type = project_type
+            self.repo_name = new_package_name  # 使用新包名作为仓库名
+            
+            # 从项目中检测版本
+            from src.project_detector import ProjectDetector
+            detector = ProjectDetector(repo_path)
+            project_info = detector.detect()
+            self.version = project_info.get('version', '1.0.0')
+            
+            print(f"\n✅ 克隆和修改完成")
+            print(f"📁 项目路径: {repo_path}")
+            print(f"📦 新包名: {new_package_name}")
+            print(f"🔧 项目类型: {project_type}")
+            print(f"🏷️  版本: {self.version}")
+            
+            # ===== 步骤 2: 扫描敏感信息 =====
+            self.update_progress(15)
+            self.step_scan_project()
+            result['steps_completed'].append('scan')
+            
+            # ===== 步骤 3: 创建GitHub仓库 =====
+            self.update_progress(25)
+            self.step_create_repo()
+            result['steps_completed'].append('create_repo')
+            result['github_repo_url'] = self.github_repo_url
+            
+            # ===== 步骤 4: 生成CI/CD Pipeline =====
+            self.update_progress(35)
+            self.step_generate_pipeline()
+            result['steps_completed'].append('generate_pipeline')
+            
+            # ===== 步骤 5: 配置GitHub Secrets（如果需要） =====
+            self.update_progress(40)
+            self._configure_github_secrets()
+            result['steps_completed'].append('configure_secrets')
+            
+            # ===== 步骤 6: 推送代码到GitHub =====
+            self.update_progress(50)
+            self.step_push_code()
+            result['steps_completed'].append('push_code')
+            
+            # ===== 步骤 7: 立即触发发布（创建Tag） =====
+            self.update_progress(60)
+            print(f"\n{'='*60}")
+            print(f"🚀 立即触发发布")
+            print(f"{'='*60}")
+            print(f"💡 首次推送后立即创建版本标签以触发打包发布")
+            
+            self.step_trigger_publish()
+            result['steps_completed'].append('trigger_publish')
+            
+            # ===== 步骤 8: 获取包信息 =====
+            self.update_progress(70)
+            self.step_fetch_package()
+            result['steps_completed'].append('fetch_package')
+            
+            # ===== 步骤 9: AI生成模板 =====
+            self.update_progress(75)
+            self.step_ai_generate()
+            result['steps_completed'].append('ai_generate')
+            
+            # ===== 步骤 10: 生成Logo（可选） =====
+            self.update_progress(80)
+            try:
+                self.step_generate_logo()
+                result['steps_completed'].append('generate_logo')
+            except Exception as e:
+                print(f"⚠️  Logo生成失败（继续流程）: {e}")
+                result['errors'].append(f"Logo生成: {e}")
+            
+            # ===== 步骤 11: 发布到EMCP =====
+            self.update_progress(85)
+            self.step_publish_emcp()
+            result['steps_completed'].append('publish_emcp')
+            result['template_id'] = self.template_id
+            
+            # ===== 步骤 12: MCP测试（可选） =====
+            self.update_progress(90)
+            try:
+                self.step_test_mcp()
+                result['steps_completed'].append('test_mcp')
+            except Exception as e:
+                print(f"⚠️  MCP测试失败（继续流程）: {e}")
+                result['errors'].append(f"MCP测试: {e}")
+            
+            # ===== 步骤 13: Agent测试（可选） =====
+            self.update_progress(95)
+            try:
+                self.step_test_agent()
+                result['steps_completed'].append('test_agent')
+            except Exception as e:
+                print(f"⚠️  Agent测试失败（继续流程）: {e}")
+                result['errors'].append(f"Agent测试: {e}")
+            
+            # ===== 完成 =====
+            self.update_progress(100)
+            result['success'] = True
+            result['package_name'] = self.package_name
+            result['github_repo_url'] = self.github_repo_url
+            result['template_id'] = self.template_id
+            
+            print(f"\n{'='*70}")
+            print(f"✅ 克隆和发布工作流程完成！")
+            print(f"{'='*70}")
+            print(f"📦 包名: {self.package_name}")
+            print(f"🔗 GitHub: {self.github_repo_url}")
+            if self.template_id:
+                print(f"🆔 模板ID: {self.template_id}")
+            print(f"✅ 完成步骤: {', '.join(result['steps_completed'])}")
+            if result['errors']:
+                print(f"⚠️  错误: {len(result['errors'])} 个")
+            
+            return result
+            
+        except Exception as e:
+            import traceback
+            error_msg = str(e)
+            error_trace = traceback.format_exc()
+            
+            result['success'] = False
+            result['error'] = error_msg
+            result['error_trace'] = error_trace
+            result['errors'].append(error_msg)
+            
+            print(f"\n{'='*70}")
+            print(f"❌ 工作流程失败")
+            print(f"{'='*70}")
+            print(f"错误: {error_msg}")
+            print(f"已完成步骤: {', '.join(result['steps_completed'])}")
+            print(f"\n详细错误:")
+            print(error_trace)
+            
+            return result
+            
+        finally:
+            # 清理临时目录（如果使用了临时目录）
+            if cloner and cloner.temp_dir:
+                print(f"\n💡 提示: 临时目录位于 {cloner.temp_dir}")
+                print(f"   如果不再需要，可以手动删除或调用 cloner.cleanup()")
+    
+    def _configure_github_secrets(self):
+        """配置GitHub Secrets用于自动发布"""
+        print(f"\n{'='*60}")
+        print(f"步骤: 配置 GitHub Secrets")
+        print(f"{'='*60}")
+        
+        github_token = self.config.get("github", {}).get("token", "")
+        if not github_token:
+            print(f"⚠️  未配置GitHub Token，跳过")
+            return
+        
+        github_mgr = GitHubManager(github_token)
+        
+        secrets_to_set = {}
+        
+        # 根据项目类型配置不同的 Secrets
+        if self.package_type == 'python':
+            # PyPI Token
+            pypi_token = self.config.get("pypi", {}).get("token", "")
+            if pypi_token:
+                secrets_to_set['PYPI_TOKEN'] = pypi_token
+                print(f"  ✓ 准备设置 PYPI_TOKEN")
+            else:
+                print(f"  ⚠️  未配置 PyPI Token")
+        
+        elif self.package_type == 'node.js':
+            # NPM Token
+            npm_token = self.config.get("npm", {}).get("token", "")
+            if npm_token:
+                secrets_to_set['NPM_TOKEN'] = npm_token
+                print(f"  ✓ 准备设置 NPM_TOKEN")
+            else:
+                print(f"  ⚠️  未配置 NPM Token")
+        
+        if not secrets_to_set:
+            print(f"ℹ️  没有需要设置的 Secrets")
+            return
+        
+        # 批量设置 Secrets
+        try:
+            results = github_mgr.set_multiple_secrets(
+                self.org_name,
+                self.repo_name,
+                secrets_to_set
+            )
+            
+            success_count = sum(1 for v in results.values() if v)
+            print(f"✅ 设置了 {success_count}/{len(secrets_to_set)} 个 Secrets")
+            
+            for name, success in results.items():
+                status = "✓" if success else "✗"
+                print(f"  {status} {name}")
+                
+        except Exception as e:
+            print(f"⚠️  设置 Secrets 失败: {e}")
+            print(f"💡 请手动在GitHub仓库设置中添加 Secrets")
         
         print(f"✅ 步骤完成\n")
 

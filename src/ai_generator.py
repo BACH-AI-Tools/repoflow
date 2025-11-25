@@ -173,7 +173,25 @@ class AITemplateGenerator:
             
             # 解析响应
             result_text = response.choices[0].message.content
+            
+            # ⭐ 添加调试输出
+            print(f"\n🤖 AI 原始响应:")
+            print(f"{'='*70}")
+            print(result_text[:1000] if len(result_text) > 1000 else result_text)
+            if len(result_text) > 1000:
+                print(f"... (响应较长，已截取前1000字符)")
+            print(f"{'='*70}\n")
+            
             result = json.loads(result_text)
+            
+            # ⭐ 检查描述字段
+            if result.get('description_cn'):
+                desc_len = len(result['description_cn'])
+                print(f"✓ AI 生成的中文描述长度: {desc_len} 字符")
+                if desc_len < 50:
+                    print(f"⚠️ 警告：描述太短！内容：{result['description_cn']}")
+            else:
+                print(f"❌ 警告：AI 响应中缺少 description_cn 字段")
             
             # 补充默认值
             return self._complete_template_info(result, package_info, package_type)
@@ -204,6 +222,12 @@ class AITemplateGenerator:
         # 如果有 README，使用完整内容；否则使用简介
         description_for_ai = full_readme if full_readme else info.get('summary', '暂无')
         
+        # ⭐ 添加调试输出
+        print(f"\n📋 传给 AI 的 README 内容:")
+        print(f"   长度: {len(description_for_ai)} 字符")
+        print(f"   前200字符: {description_for_ai[:200]}")
+        print()
+        
         # 限制 AI prompt 的长度（但保留更多信息）
         if len(description_for_ai) > 3000:
             description_for_ai = description_for_ai[:3000] + "\n\n... (描述较长，已截取前3000字符)"
@@ -222,6 +246,22 @@ class AITemplateGenerator:
 
 {categories_text}
 
+⚠️ 特别注意：
+1. description 字段必须描述这个 MCP Server 的实际功能和用途，不要包含包名、版本、传输协议等元信息！
+2. 参考以下示例格式：
+
+【好的示例】：
+"这是一个用于访问 YouTube 数据的 MCP Server，提供视频搜索、频道信息查询等功能，帮助开发者快速集成 YouTube API。
+
+可用工具：search - 搜索视频，get_channel_info - 获取频道信息，get_video_details - 获取视频详情。"
+
+【错误示例】（不要这样写）：
+"这是一个
+
+- **PyPI 包名**: bach-youtube
+- **版本**: 1.0.0
+- **传输协议**: stdio"
+
 请生成以下 JSON 格式的内容（包含简体中文、繁体中文、英文三个版本）：
 
 {{
@@ -231,9 +271,9 @@ class AITemplateGenerator:
   "summary_cn": "一句话中文简体简介（20-50字，突出核心功能和价值）",
   "summary_tw": "一句話中文繁體簡介（請使用正確的繁體字，如：資料、檔案、網絡、伺服器等）",
   "summary_en": "One-sentence English summary (highlighting core features and value)",
-  "description_cn": "详细功能描述（简体中文，150-300字，必须按照以下结构：\n第一段：介绍这个 MCP 是干嘛用的（用途、应用场景）\n第二段：介绍这个 MCP 提供的工具（从 README 中提取工具名称和功能，如果有多个工具用列表展示）",
-  "description_tw": "詳細功能描述（繁體中文，150-300字，必須按照以下結構：\n第一段：介紹這個 MCP 是幹嘛用的（用途、應用場景）\n第二段：介紹這個 MCP 提供的工具（從 README 中提取工具名稱和功能，如果有多個工具用列表展示）\n請使用正確的繁體字）",
-  "description_en": "Detailed description (English, 150-300 words, must follow this structure:\nParagraph 1: What this MCP is for (purpose, use cases)\nParagraph 2: Tools provided by this MCP (extract tool names and functions from README, list if multiple tools)",
+  "description_cn": "功能描述（简体中文，80-150字，必须严格按照以下两段结构：\n第一段（简短介绍）：2-3句话介绍这个 MCP Server 的实际功能、提供什么服务、适用于什么场景\n第二段（工具列表）：以「可用工具：」开头，列举工具名称和简要说明\n【重要禁止事项】绝对不要包含：包名、版本号、传输协议、安装步骤、运行命令、配置方法、环境要求、使用示例等技术细节和元信息！",
+  "description_tw": "功能描述（繁體中文，80-150字，必須嚴格按照以下兩段結構：\n第一段（簡短介紹）：2-3句話介紹這個 MCP Server 的實際功能、提供什麼服務、適用於什麼場景\n第二段（工具列表）：以「可用工具：」開頭，列舉工具名稱和簡要說明\n【重要禁止事項】絕對不要包含：包名、版本號、傳輸協議、安裝步驟、運行命令、配置方法、環境要求、使用示例等技術細節和元信息！\n請使用正確的繁體字）",
+  "description_en": "Description (English, 80-150 words, must strictly follow this two-paragraph structure:\nParagraph 1 (Brief Introduction): 2-3 sentences introducing the actual functionality of this MCP Server, what services it provides, and what scenarios it's suitable for\nParagraph 2 (Tool List): Starting with 'Available Tools:', enumerate tool names with brief descriptions\n【Critical Prohibitions】NEVER include: package name, version number, transport protocol, installation steps, running commands, configuration methods, environment requirements, usage examples, or any technical details and meta information!",
   "route_prefix": "建议的路由前缀（仅小写字母和数字，不能以数字开头，不超过10字符，如 filesearch）",
   "category_id": "从上面分类列表中选择最合适的ID（只填写ID，如 1、2、3 等）"
 }}
@@ -255,11 +295,14 @@ class AITemplateGenerator:
    - BACH → 巴赫
    例如：bachai-data-analysis-mcp → 巴赫数据分析服务器
 4. **描述格式要求（非常重要）**：
-   - 必须分为两段
-   - 第一段：介绍这个 MCP 是什么、用途是什么、适用于什么场景
-   - 第二段：介绍这个 MCP 提供哪些工具，每个工具做什么
-   - 从 README 中仔细提取工具信息，如果 README 中列出了工具列表，一定要在描述中体现
-   - 如果有多个工具，可以用"提供了XXX、YYY、ZZZ等工具"的格式
+   - 必须保持简洁，80-150字即可
+   - **必须严格按照两段式结构**：
+     * 第一段（简短介绍）：2-3句话介绍这个 MCP 是什么、主要用途和适用场景
+     * 第二段（工具列表）：以"可用工具："开头，列出工具名称和简要说明
+   - 从 README 中提取工具信息，但只保留工具名称和功能，不要复制安装、配置、使用说明等内容
+   - ⚠️ 禁止包含以下内容：安装步骤、运行命令、配置方法、环境要求、使用示例、引流语句等
+   - 段落之间用换行分隔
+   - 不要自己添加任何引流性的开场白或结束语
 5. route_prefix 规则：
    - 只能包含小写字母(a-z)和数字(0-9)
    - 不能以数字开头

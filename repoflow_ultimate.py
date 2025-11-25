@@ -22,6 +22,7 @@ from src.project_detector import ProjectDetector
 from src.github_manager import GitHubManager
 from src.git_manager import GitManager
 from src.pipeline_generator import PipelineGenerator
+from src.workflow_executor import WorkflowExecutor
 
 
 class UltimateModernGUI:
@@ -79,6 +80,11 @@ class UltimateModernGUI:
         self.org_name = tk.StringVar(value="BACH-AI-Tools")
         self.pipeline_type = tk.StringVar(value="auto")
         self.github_token = ""
+        
+        # 克隆功能变量
+        self.clone_url = tk.StringVar()
+        self.clone_prefix = tk.StringVar(value="bachai")
+        self.current_tab = "local"  # 'local' 或 'clone'
         
         # 动画变量
         self.animation_running = False
@@ -297,14 +303,46 @@ class UltimateModernGUI:
     
     def create_main_content(self):
         """创建主内容区"""
-        # Token状态卡片
+        # Token状态卡片（总是显示，让用户知道是否已配置）
         if not self.github_token:
-            self.create_token_card()
+            # 创建简化的Token提示
+            token_hint = tk.Frame(self.content_frame, bg=self.COLORS['bg_top'])
+            token_hint.pack(fill=tk.X, pady=(0, 20))
+            
+            hint_card = tk.Frame(token_hint, bg='#2D1F3F')
+            hint_card.pack(pady=5)
+            
+            hint_content = tk.Frame(hint_card, bg='#2D1F3F')
+            hint_content.pack(padx=20, pady=10)
+            
+            tk.Label(
+                hint_content,
+                text="⚠️ GitHub Token 未配置",
+                font=("微软雅黑", 11, "bold"),
+                fg=self.COLORS['warning'],
+                bg='#2D1F3F'
+            ).pack(side=tk.LEFT, padx=(0, 15))
+            
+            config_link = tk.Label(
+                hint_content,
+                text="点击右下角「⚙️ 设置」进行配置",
+                font=("微软雅黑", 10),
+                fg=self.COLORS['info'],
+                bg='#2D1F3F'
+            )
+            config_link.pack(side=tk.LEFT)
         else:
             self.create_token_status_badge()
         
-        # 主表单卡片
-        self.create_form_card()
+        # 标签页切换（总是显示）
+        self.create_tab_switcher()
+        
+        # 内容容器
+        self.tab_content_frame = tk.Frame(self.content_frame, bg=self.COLORS['bg_top'])
+        self.tab_content_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 根据当前标签显示内容
+        self.show_current_tab()
     
     def create_token_card(self):
         """创建Token配置卡片"""
@@ -429,9 +467,143 @@ class UltimateModernGUI:
         reconfig_btn.bind("<Enter>", lambda e: reconfig_btn.config(fg=self.COLORS['accent2']))
         reconfig_btn.bind("<Leave>", lambda e: reconfig_btn.config(fg=self.COLORS['info']))
     
-    def create_form_card(self):
-        """创建表单卡片"""
-        card = self.create_glass_card(self.content_frame, 350)
+    def create_tab_switcher(self):
+        """创建标签页切换器"""
+        print("🔧 创建标签页切换器...")  # 调试信息
+        
+        tab_frame = tk.Frame(self.content_frame, bg=self.COLORS['bg_top'])
+        tab_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        # 标签容器 - 使用更明显的背景色和边框
+        tab_container = tk.Frame(tab_frame, bg='#1E233C', relief=tk.RAISED, bd=2)
+        tab_container.pack(pady=10)  # 增加外边距
+        
+        print(f"  标签容器已创建: {tab_container}")  # 调试信息
+        
+        # 本地项目标签
+        print("  创建【本地项目】标签...")  # 调试信息
+        self.local_tab_btn = self.create_tab_button(
+            tab_container,
+            "📁 本地项目",
+            lambda: self.switch_tab("local"),
+            is_active=True
+        )
+        self.local_tab_btn.pack(side=tk.LEFT, padx=5, pady=5)  # 增加内边距
+        print(f"    本地标签已创建: {self.local_tab_btn}")  # 调试信息
+        
+        # 克隆仓库标签
+        print("  创建【克隆仓库】标签...")  # 调试信息
+        self.clone_tab_btn = self.create_tab_button(
+            tab_container,
+            "🔗 克隆仓库",
+            lambda: self.switch_tab("clone"),
+            is_active=False
+        )
+        self.clone_tab_btn.pack(side=tk.LEFT, padx=5, pady=5)  # 增加内边距
+        print(f"    克隆标签已创建: {self.clone_tab_btn}")  # 调试信息
+        print("✅ 标签页切换器创建完成！")  # 调试信息
+    
+    def create_tab_button(self, parent, text, command, is_active=False):
+        """创建标签按钮"""
+        btn = tk.Frame(parent, bg='#2D3250' if is_active else '#1E233C', cursor="hand2")
+        # 不要禁用 pack_propagate，让按钮自动调整大小
+        
+        label = tk.Label(
+            btn,
+            text=text,
+            font=("微软雅黑", 13, "bold" if is_active else "normal"),  # 增大字体
+            fg=self.COLORS['accent'] if is_active else self.COLORS['text_secondary'],
+            bg='#2D3250' if is_active else '#1E233C',
+            cursor="hand2"
+        )
+        label.pack(padx=30, pady=15)  # 增大内边距，让按钮更大
+        
+        # 保存标签和按钮的引用
+        btn._label = label
+        btn._is_active = is_active
+        btn._command = command
+        
+        # 绑定点击事件
+        def on_click(e):
+            command()
+        
+        btn.bind("<Button-1>", on_click)
+        label.bind("<Button-1>", on_click)
+        
+        # 悬停效果（非活动状态）
+        def on_enter(e):
+            if not btn._is_active:
+                btn.config(bg='#252A45')
+                label.config(bg='#252A45')
+        
+        def on_leave(e):
+            if not btn._is_active:
+                btn.config(bg='#1E233C')
+                label.config(bg='#1E233C')
+        
+        btn.bind("<Enter>", on_enter)
+        btn.bind("<Leave>", on_leave)
+        label.bind("<Enter>", on_enter)
+        label.bind("<Leave>", on_leave)
+        
+        return btn
+    
+    def switch_tab(self, tab_name):
+        """切换标签页"""
+        if self.current_tab == tab_name:
+            return
+        
+        self.current_tab = tab_name
+        
+        # 更新标签按钮状态
+        is_local = (tab_name == "local")
+        
+        # 更新本地标签
+        self.local_tab_btn._is_active = is_local
+        self.local_tab_btn.config(bg='#2D3250' if is_local else '#1E233C')
+        self.local_tab_btn._label.config(
+            font=("微软雅黑", 12, "bold" if is_local else "normal"),
+            fg=self.COLORS['accent'] if is_local else self.COLORS['text_secondary'],
+            bg='#2D3250' if is_local else '#1E233C'
+        )
+        
+        # 更新克隆标签
+        self.clone_tab_btn._is_active = not is_local
+        self.clone_tab_btn.config(bg='#2D3250' if not is_local else '#1E233C')
+        self.clone_tab_btn._label.config(
+            font=("微软雅黑", 12, "bold" if not is_local else "normal"),
+            fg=self.COLORS['accent'] if not is_local else self.COLORS['text_secondary'],
+            bg='#2D3250' if not is_local else '#1E233C'
+        )
+        
+        # 显示对应的内容
+        self.show_current_tab()
+        
+        # 更新底部按钮
+        if hasattr(self, 'actions_frame'):
+            self.update_bottom_buttons()
+    
+    def show_current_tab(self):
+        """显示当前标签页内容"""
+        print(f"📄 显示标签页: {self.current_tab}")  # 调试
+        
+        # 清空当前内容
+        for widget in self.tab_content_frame.winfo_children():
+            widget.destroy()
+        
+        # 根据标签显示不同内容
+        if self.current_tab == "local":
+            print("  ➡️ 创建本地项目表单")  # 调试
+            self.create_local_form_card()
+        elif self.current_tab == "clone":
+            print("  ➡️ 创建克隆仓库表单")  # 调试
+            self.create_clone_form_card()
+        else:
+            print(f"  ❌ 未知标签: {self.current_tab}")  # 调试
+    
+    def create_local_form_card(self):
+        """创建本地项目表单卡片"""
+        card = self.create_glass_card(self.tab_content_frame, 350)
         card.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
         
         content = tk.Frame(card, bg='#1E233C')
@@ -484,67 +656,138 @@ class UltimateModernGUI:
             "GitHub 组织名称",
             self.org_name
         )
+    
+    def create_clone_form_card(self):
+        """创建克隆仓库表单卡片"""
+        print("🎨 开始创建克隆表单卡片...")  # 调试
+        print(f"  容器: {self.tab_content_frame}")  # 调试
         
-        # Pipeline类型
-        pipeline_frame = tk.Frame(content, bg='#1E233C')
-        pipeline_frame.pack(fill=tk.X, pady=(15, 0))
+        # 创建带滚动条的容器
+        card_container = tk.Frame(self.tab_content_frame, bg=self.COLORS['bg_top'])
+        card_container.pack(fill=tk.BOTH, expand=True, pady=(10, 20), padx=20)
         
-        # 左侧标签
-        label_container = tk.Frame(pipeline_frame, bg='#1E233C')
-        label_container.pack(side=tk.LEFT)
+        # 创建Canvas用于滚动
+        canvas = tk.Canvas(card_container, bg='#252A45', highlightthickness=0)
+        scrollbar = tk.Scrollbar(card_container, orient="vertical", command=canvas.yview)
         
-        tk.Label(
-            label_container,
-            text="🔧",
-            font=("Segoe UI Emoji", 18),
-            bg='#1E233C'
-        ).pack(side=tk.LEFT, padx=(0, 8))
+        # 创建内容框架
+        card = tk.Frame(canvas, bg='#252A45')
         
-        tk.Label(
-            label_container,
-            text="Pipeline 类型",
-            font=("微软雅黑", 12, "bold"),
-            fg=self.COLORS['text_primary'],
-            bg='#1E233C'
-        ).pack(side=tk.LEFT)
-        
-        # Pipeline选择器
-        pipeline_selector = self.create_modern_combobox(
-            pipeline_frame,
-            self.pipeline_type,
-            ['自动检测', 'pypi', 'npm', 'docker']
+        # 配置Canvas
+        card.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
-        pipeline_selector.pack(side=tk.RIGHT)
+        
+        canvas.create_window((0, 0), window=card, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # 打包Canvas和滚动条
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        print(f"  卡片已创建: {card}")  # 调试
+        
+        content = tk.Frame(card, bg='#252A45')
+        content.pack(fill=tk.BOTH, expand=True, padx=30, pady=25)
+        
+        # 标题说明
+        desc_frame = tk.Frame(content, bg='#252A45')
+        desc_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        tk.Label(
+            desc_frame,
+            text="🔗 克隆并发布 GitHub 仓库",
+            font=("微软雅黑", 16, "bold"),
+            fg='#F093FB',  # 使用亮色
+            bg='#252A45'
+        ).pack(anchor=tk.W)
+        
+        tk.Label(
+            desc_frame,
+            text="自动克隆、修改包名（添加前缀）、推送到你的组织、立即发布",
+            font=("微软雅黑", 11),
+            fg='#B0B8D4',  # 亮灰色
+            bg='#252A45'
+        ).pack(anchor=tk.W, pady=(8, 0))
+        
+        # GitHub URL
+        self.create_form_row(
+            content,
+            "🌐",
+            "GitHub 仓库URL",
+            "例如: https://github.com/user/awesome-mcp",
+            self.clone_url
+        )
+        
+        # 包名前缀
+        self.create_form_row(
+            content,
+            "🏷️",
+            "包名前缀",
+            "会自动添加到包名前（避免冲突）",
+            self.clone_prefix
+        )
+        
+        # 组织名称（共用）
+        self.create_form_row(
+            content,
+            "🏢",
+            "目标组织",
+            "推送到哪个GitHub组织",
+            self.org_name
+        )
+        
+        # 说明文字 - 简化为单行
+        info_frame = tk.Frame(content, bg='#1E233C')
+        info_frame.pack(fill=tk.X, pady=(15, 20))
+        
+        tk.Label(
+            info_frame,
+            text="💡 流程：克隆 → 修改包名 → 推送到组织 → 自动打包发布",
+            font=("微软雅黑", 10),
+            fg='#4FC3F7',
+            bg='#1E233C'
+        ).pack()
+        
+        # 在表单内部添加发布按钮
+        btn_frame = tk.Frame(content, bg='#1E233C')
+        btn_frame.pack(fill=tk.X, pady=(20, 10))
+        
+        self.create_gradient_button(
+            btn_frame,
+            "🔗 克隆并发布",
+            self.start_clone_and_publish,
+            width=400,
+            height=50,
+            is_primary=True
+        ).pack(expand=True)
+    
     
     def create_form_row(self, parent, icon, label, hint, variable, 
                        has_button=False, button_text="", button_cmd=None):
         """创建表单行"""
-        row = tk.Frame(parent, bg='#1E233C')
-        row.pack(fill=tk.X, pady=(0, 15))
+        # 获取父容器的背景色
+        parent_bg = parent.cget('bg')
+        
+        row = tk.Frame(parent, bg=parent_bg)
+        row.pack(fill=tk.X, pady=(0, 20))
         
         # 图标和标签
-        label_frame = tk.Frame(row, bg='#1E233C', width=150)
-        label_frame.pack(side=tk.LEFT)
-        label_frame.pack_propagate(False)
+        label_frame = tk.Frame(row, bg=parent_bg)
+        label_frame.pack(side=tk.TOP, fill=tk.X, pady=(0, 8))
         
         tk.Label(
             label_frame,
-            text=icon,
-            font=("Segoe UI Emoji", 18),
-            bg='#1E233C'
-        ).pack(side=tk.LEFT, padx=(0, 8))
-        
-        tk.Label(
-            label_frame,
-            text=label,
-            font=("微软雅黑", 12, "bold"),
-            fg=self.COLORS['text_primary'],
-            bg='#1E233C'
+            text=f"{icon}  {label}",  # 合并图标和标签
+            font=("微软雅黑", 13, "bold"),
+            fg='#FFFFFF',  # 纯白色，更醒目
+            bg=parent_bg
         ).pack(side=tk.LEFT)
         
         # 输入框
         entry = self.create_modern_entry(row, variable, hint)
-        entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(10, 0))
+        entry.pack(side=tk.TOP, fill=tk.X, expand=True)
         
         # 可选按钮
         if has_button:
@@ -552,38 +795,60 @@ class UltimateModernGUI:
                 row,
                 button_text,
                 button_cmd,
-                width=90,
+                width=100,
                 is_secondary=True
             )
-            btn.pack(side=tk.LEFT, padx=(8, 0))
+            btn.pack(side=tk.TOP, pady=(8, 0))
         
         return row
     
     def create_bottom_actions(self):
         """创建底部操作区"""
-        actions = tk.Frame(self.content_frame, bg=self.COLORS['bg_top'])
-        actions.pack(fill=tk.X)
+        self.actions_frame = tk.Frame(self.content_frame, bg=self.COLORS['bg_top'])
+        self.actions_frame.pack(fill=tk.X)
         
-        # 主要操作按钮
-        main_btn = self.create_gradient_button(
-            actions,
-            "🚀 开始发布",
-            self.start_publish,
-            width=300,
-            height=56,
-            is_primary=True
-        )
-        main_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 10))
+        # 保存按钮引用，以便动态更新
+        self.update_bottom_buttons()
+    
+    def update_bottom_buttons(self):
+        """根据当前标签页更新底部按钮"""
+        # 清空现有按钮
+        for widget in self.actions_frame.winfo_children():
+            widget.destroy()
         
-        # 设置按钮
-        settings_btn = self.create_gradient_button(
-            actions,
-            "⚙️ 设置",
-            self.open_settings,
-            width=120,
-            height=56
-        )
-        settings_btn.pack(side=tk.LEFT)
+        # 根据当前标签页显示不同按钮
+        if self.current_tab == "local":
+            # 本地项目模式
+            main_btn = self.create_gradient_button(
+                self.actions_frame,
+                "🚀 开始发布",
+                self.start_publish,
+                width=300,
+                height=56,
+                is_primary=True
+            )
+            main_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 10))
+            
+            # 设置按钮
+            settings_btn = self.create_gradient_button(
+                self.actions_frame,
+                "⚙️ 设置",
+                self.open_settings,
+                width=120,
+                height=56
+            )
+            settings_btn.pack(side=tk.LEFT)
+        else:
+            # 克隆仓库模式 - 只显示克隆按钮，更大更显眼
+            main_btn = self.create_gradient_button(
+                self.actions_frame,
+                "🔗 克隆并发布",
+                self.start_clone_and_publish,
+                width=400,
+                height=56,
+                is_primary=True
+            )
+            main_btn.pack(expand=True, fill=tk.X)
     
     def create_glass_card(self, parent, height):
         """创建毛玻璃卡片"""
@@ -881,6 +1146,199 @@ class UltimateModernGUI:
                 messagebox.showerror("错误", f"发布失败: {str(e)}")
         
         threading.Thread(target=publish_thread, daemon=True).start()
+    
+    def start_clone_and_publish(self):
+        """开始克隆并发布"""
+        # 验证输入
+        if not self.github_token:
+            messagebox.showwarning("警告", "请先配置 GitHub Token")
+            return
+        
+        clone_url = self.clone_url.get().strip()
+        if not clone_url:
+            messagebox.showwarning("警告", "请输入GitHub仓库URL")
+            return
+        
+        # 验证URL格式
+        if not ('github.com' in clone_url or 'github' in clone_url):
+            messagebox.showwarning("警告", "请输入有效的GitHub仓库URL")
+            return
+        
+        prefix = self.clone_prefix.get().strip()
+        if not prefix:
+            messagebox.showwarning("警告", "请输入包名前缀")
+            return
+        
+        org_name = self.org_name.get().strip()
+        if not org_name:
+            messagebox.showwarning("警告", "请输入目标组织名称")
+            return
+        
+        # 确认操作
+        confirm_msg = (
+            f"即将执行以下操作：\n\n"
+            f"1. 克隆仓库: {clone_url}\n"
+            f"2. 修改包名（添加前缀: {prefix}）\n"
+            f"3. 推送到组织: {org_name}\n"
+            f"4. 自动打包并发布\n\n"
+            f"是否继续？"
+        )
+        
+        if not messagebox.askyesno("确认", confirm_msg):
+            return
+        
+        # 显示进度窗口
+        progress_window = tk.Toplevel(self.root)
+        progress_window.title("克隆并发布")
+        progress_window.geometry("600x400")
+        progress_window.configure(bg=self.COLORS['bg_top'])
+        progress_window.transient(self.root)
+        progress_window.grab_set()
+        
+        # 居中显示
+        progress_window.update_idletasks()
+        x = (progress_window.winfo_screenwidth() // 2) - (600 // 2)
+        y = (progress_window.winfo_screenheight() // 2) - (400 // 2)
+        progress_window.geometry(f'600x400+{x}+{y}')
+        
+        # 标题
+        title_label = tk.Label(
+            progress_window,
+            text="🚀 正在克隆并发布...",
+            font=("微软雅黑", 16, "bold"),
+            fg=self.COLORS['text_primary'],
+            bg=self.COLORS['bg_top']
+        )
+        title_label.pack(pady=(20, 10))
+        
+        # 进度条
+        progress_var = tk.DoubleVar()
+        progress_bar = ttk.Progressbar(
+            progress_window,
+            variable=progress_var,
+            maximum=100,
+            length=500,
+            mode='determinate'
+        )
+        progress_bar.pack(pady=20)
+        
+        # 日志文本框
+        log_frame = tk.Frame(progress_window, bg=self.COLORS['bg_top'])
+        log_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
+        
+        log_text = tk.Text(
+            log_frame,
+            font=("Consolas", 9),
+            fg=self.COLORS['text_secondary'],
+            bg='#1E233C',
+            wrap=tk.WORD,
+            bd=0
+        )
+        log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        scrollbar = ttk.Scrollbar(log_frame, command=log_text.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        log_text.config(yscrollcommand=scrollbar.set)
+        
+        def log_message(msg):
+            """添加日志"""
+            log_text.insert(tk.END, msg + "\n")
+            log_text.see(tk.END)
+            log_text.update()
+        
+        def update_progress(value):
+            """更新进度"""
+            progress_var.set(value)
+            progress_window.update()
+        
+        # 在后台线程执行克隆和发布
+        def clone_and_publish_thread():
+            try:
+                log_message(f"{'='*60}")
+                log_message(f"开始克隆并发布工作流程")
+                log_message(f"{'='*60}")
+                log_message(f"源仓库: {clone_url}")
+                log_message(f"包名前缀: {prefix}")
+                log_message(f"目标组织: {org_name}")
+                log_message("")
+                
+                # 创建配置管理器和工作流执行器
+                config_mgr = UnifiedConfigManager()
+                executor = WorkflowExecutor(config_mgr)
+                
+                # 设置进度回调
+                executor.set_progress_callback(update_progress)
+                
+                # 重定向输出到GUI
+                import io
+                import contextlib
+                
+                output_buffer = io.StringIO()
+                
+                # 执行克隆和发布
+                with contextlib.redirect_stdout(output_buffer):
+                    result = executor.workflow_clone_and_publish(
+                        github_url=clone_url,
+                        prefix=prefix
+                    )
+                
+                # 显示输出
+                output = output_buffer.getvalue()
+                if output:
+                    log_message(output)
+                
+                # 检查结果
+                if result['success']:
+                    log_message("")
+                    log_message(f"{'='*60}")
+                    log_message("✅ 克隆并发布成功！")
+                    log_message(f"{'='*60}")
+                    log_message(f"新包名: {result.get('package_name', 'N/A')}")
+                    log_message(f"GitHub仓库: {result.get('github_repo_url', 'N/A')}")
+                    if result.get('template_id'):
+                        log_message(f"EMCP模板ID: {result['template_id']}")
+                    
+                    # 延迟关闭窗口
+                    progress_window.after(3000, progress_window.destroy)
+                    
+                    # 显示成功消息
+                    self.root.after(3100, lambda: messagebox.showinfo(
+                        "成功",
+                        f"克隆并发布完成！\n\n"
+                        f"包名: {result.get('package_name')}\n"
+                        f"GitHub: {result.get('github_repo_url')}"
+                    ))
+                else:
+                    log_message("")
+                    log_message("❌ 克隆并发布失败")
+                    log_message(f"错误: {result.get('error', '未知错误')}")
+                    
+                    # 显示错误
+                    self.root.after(0, lambda: messagebox.showerror(
+                        "失败",
+                        f"克隆并发布失败:\n{result.get('error', '未知错误')}"
+                    ))
+                
+            except Exception as e:
+                import traceback
+                error_msg = str(e)
+                error_trace = traceback.format_exc()
+                
+                log_message("")
+                log_message("❌ 发生异常")
+                log_message(f"错误: {error_msg}")
+                log_message("")
+                log_message("详细错误:")
+                log_message(error_trace)
+                
+                self.root.after(0, lambda: messagebox.showerror(
+                    "异常",
+                    f"执行过程中发生异常:\n{error_msg}"
+                ))
+        
+        # 启动后台线程
+        thread = threading.Thread(target=clone_and_publish_thread, daemon=True)
+        thread.start()
     
     def open_settings(self):
         """打开设置窗口"""

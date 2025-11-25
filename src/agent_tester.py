@@ -41,17 +41,20 @@ class AgentPlatformClient:
         self.session_key = None
         self.user_info = None
     
-    def login(self, phone: str, validation_code: str) -> Dict:
+    def login(self, phone: str, validation_code: str, max_retries: int = 3) -> Dict:
         """
-        登录 Agent 平台
+        登录 Agent 平台（带重试机制）
         
         Args:
             phone: 手机号
             validation_code: 验证码（格式 MMyyyydd，如 11202507）
+            max_retries: 最大重试次数（默认3次）
         
         Returns:
             用户信息
         """
+        import time
+        
         url = f"{self.base_url}/api/authentication/verfiy_sms_validation_code_login?guest=true"
         
         payload = {
@@ -61,55 +64,89 @@ class AgentPlatformClient:
             "validation_code": validation_code
         }
         
+        # 完整的请求头（参考浏览器请求）
         headers = {
-            'Content-Type': 'application/json;charset=UTF-8'
+            'Accept': 'application/json, text/plain, */*',
+            'Content-Type': 'application/json;charset=UTF-8',
+            'Language': 'ch_cn',  # 重要：语言设置
+            'Cache-Control': 'no-cache',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         }
         
         AgentTesterLogger.log(f"   📤 POST {url}")
         AgentTesterLogger.log(f"   📱 手机号: {phone}")
         AgentTesterLogger.log(f"   🔑 验证码: {validation_code}")
         
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=30)
-            
-            AgentTesterLogger.log(f"   📥 响应: {response.status_code}")
-            
-            if response.status_code == 200:
-                data = response.json()
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(url, headers=headers, json=payload, timeout=30)
                 
-                # ⭐ 打印完整响应以便调试
-                AgentTesterLogger.log(f"   📋 完整响应:")
-                AgentTesterLogger.log(f"   {json.dumps(data, indent=2, ensure_ascii=False)}")
+                AgentTesterLogger.log(f"   📥 响应: {response.status_code}")
                 
-                # ⭐ 检查响应结构
-                if data.get('err_code') == 0:
-                    # 标准格式：body 里面包含数据
-                    body = data.get('body', {})
-                    self.session_key = body.get('session_key')
-                    self.user_info = body
-                else:
-                    # 尝试直接获取
-                    self.session_key = data.get('session_key')
-                    self.user_info = data
+                # 处理 502 Bad Gateway
+                if response.status_code == 502:
+                    if attempt < max_retries - 1:
+                        wait_time = (attempt + 1) * 3  # 递增等待时间：3秒、6秒、9秒
+                        AgentTesterLogger.log(f"   ⚠️ 502 Bad Gateway，{wait_time}秒后重试... (尝试 {attempt + 1}/{max_retries})")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        AgentTesterLogger.log(f"   ❌ 登录失败: {response.text}")
+                        return None
                 
-                if self.session_key:
-                    AgentTesterLogger.log(f"   ✅ 登录成功")
-                    AgentTesterLogger.log(f"   👤 用户: {self.user_info.get('user_name', 'N/A')}")
-                    AgentTesterLogger.log(f"   🆔 UID: {self.user_info.get('uid')}")
-                    AgentTesterLogger.log(f"   🔑 Token: {self.session_key[:20]}...")
+                if response.status_code == 200:
+                    data = response.json()
                     
-                    return self.user_info
+                    # ⭐ 打印完整响应以便调试
+                    AgentTesterLogger.log(f"   📋 完整响应:")
+                    AgentTesterLogger.log(f"   {json.dumps(data, indent=2, ensure_ascii=False)}")
+                    
+                    # ⭐ 检查响应结构
+                    if data.get('err_code') == 0:
+                        # 标准格式：body 里面包含数据
+                        body = data.get('body', {})
+                        self.session_key = body.get('session_key')
+                        self.user_info = body
+                    else:
+                        # 尝试直接获取
+                        self.session_key = data.get('session_key')
+                        self.user_info = data
+                    
+                    if self.session_key:
+                        AgentTesterLogger.log(f"   ✅ 登录成功")
+                        AgentTesterLogger.log(f"   👤 用户: {self.user_info.get('user_name', 'N/A')}")
+                        AgentTesterLogger.log(f"   🆔 UID: {self.user_info.get('uid')}")
+                        AgentTesterLogger.log(f"   🔑 Token: {self.session_key[:20]}...")
+                        
+                        return self.user_info
+                    else:
+                        AgentTesterLogger.log(f"   ❌ 响应中没有 session_key")
+                        AgentTesterLogger.log(f"   💡 可能是验证码错误或账号问题")
+                        return None
                 else:
-                    AgentTesterLogger.log(f"   ❌ 响应中没有 session_key")
-                    AgentTesterLogger.log(f"   💡 可能是验证码错误或账号问题")
+                    AgentTesterLogger.log(f"   ❌ 登录失败: {response.text}")
                     return None
-            else:
-                AgentTesterLogger.log(f"   ❌ 登录失败: {response.text}")
-                return None
-                
-        except Exception as e:
-            AgentTesterLogger.log(f"   ❌ 登录异常: {e}")
-            return None
+                    
+            except requests.exceptions.Timeout:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 3
+                    AgentTesterLogger.log(f"   ⚠️ 请求超时，{wait_time}秒后重试... (尝试 {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    AgentTesterLogger.log(f"   ❌ 登录超时")
+                    return None
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 3
+                    AgentTesterLogger.log(f"   ⚠️ 登录异常: {e}，{wait_time}秒后重试... (尝试 {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    AgentTesterLogger.log(f"   ❌ 登录异常: {e}")
+                    return None
+        
+        return None
     
     def _get_headers(self) -> Dict:
         """获取请求 headers"""

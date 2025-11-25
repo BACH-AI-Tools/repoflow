@@ -160,7 +160,7 @@ class JimengLogoGenerator:
             package_url: 包地址 (PyPI/NPM/Docker)
             emcp_base_url: EMCP 平台地址
             use_v40: 是否使用即梦 4.0 (推荐)
-            fallback_description: 降级描述（当包不存在时使用）
+            fallback_description: MCP 模板描述（优先使用，用于生成更准确的 Logo）
             session_token: EMCP 会话 token（可选，用于上传认证）
         
         Returns:
@@ -203,14 +203,26 @@ class JimengLogoGenerator:
                         "success": False,
                         "error": f"无法识别包类型且无降级描述: {package_url}"
                     }
-            
-            print(f"✅ 包类型: {package_info['type']}")
-            print(f"✅ 包名: {package_info['package_name']}")
-            
-            info = package_info.get('info', {})
-            description = info.get('summary') or info.get('description') or info.get('name', '')
-            
-            print(f"✅ 描述: {description[:100]}...")
+            else:
+                # ⭐ 即使包存在，也优先使用 MCP 模板描述（更准确）
+                if fallback_description:
+                    print(f"✅ 包类型: {package_info['type']}")
+                    print(f"✅ 包名: {package_info['package_name']}")
+                    print(f"📝 使用 MCP 模板描述替换原始 README")
+                    # 用 MCP 模板描述覆盖原始包信息中的描述
+                    if 'info' not in package_info:
+                        package_info['info'] = {}
+                    package_info['info']['description'] = fallback_description
+                    package_info['info']['summary'] = fallback_description[:200]
+                    print(f"✅ MCP 描述: {fallback_description[:100]}...")
+                else:
+                    print(f"✅ 包类型: {package_info['type']}")
+                    print(f"✅ 包名: {package_info['package_name']}")
+                    
+                    info = package_info.get('info', {})
+                    description = info.get('summary') or info.get('description') or info.get('name', '')
+                    
+                    print(f"✅ 描述: {description[:100]}...")
             
             # 步骤 2: 生成提示词
             print(f"\n🎯 步骤 2/4: 生成 Logo 提示词...")
@@ -283,14 +295,19 @@ class JimengLogoGenerator:
         package_name = package_info['package_name']
         package_type = package_info['type']
         
-        # 获取描述（优先使用完整 README）
-        readme = info.get('readme', info.get('description', ''))
+        # 优先使用 description（可能是 MCP 模板描述）
+        description_text = info.get('description', '')
+        readme = info.get('readme', '')
         summary = info.get('summary', '')
         
-        # 使用更详细的描述（最多500字符）
-        if readme and len(readme) > 100:
-            description = readme[:500]  # ✅ 使用更长的描述
-            print(f"   📖 使用 README 生成提示词 ({len(readme)} 字符)")
+        # 判断使用哪种描述
+        if description_text and len(description_text) > 100:
+            description = description_text[:2000]  # ✅ 使用更长的描述（支持 MCP 模板描述）
+            # 判断是 MCP 模板描述还是原始 README
+            if readme and description_text == readme:
+                print(f"   📖 使用 README 生成提示词 ({len(description_text)} 字符)")
+            else:
+                print(f"   📝 使用 MCP 模板描述生成提示词 ({len(description_text)} 字符)")
         elif summary:
             description = summary[:300]
             print(f"   📝 使用简介生成提示词")
