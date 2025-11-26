@@ -152,8 +152,36 @@ class AITemplateGenerator:
         # 构建 prompt
         prompt = self._build_prompt(package_info, package_type, available_categories)
         
+        # ⭐ 保存 prompt 到文件
+        try:
+            from pathlib import Path
+            log_dir = Path("outputs/ai_logs")
+            log_dir.mkdir(parents=True, exist_ok=True)
+            
+            package_name = package_info.get('package_name', 'unknown')
+            prompt_file = log_dir / f"prompt_{package_name}.txt"
+            prompt_file.write_text(prompt, encoding='utf-8')
+            print(f"\n📝 AI Prompt 已保存到: {prompt_file}")
+            print(f"   文件大小: {len(prompt)} 字符")
+        except Exception as e:
+            print(f"⚠️ 保存 prompt 失败: {e}")
+        
+        # ⭐ 打印 prompt 摘要
+        print(f"\n{'='*70}")
+        print(f"📤 发送给 AI 的 Prompt (前 500 字符):")
+        print(f"{'='*70}")
+        print(prompt[:500])
+        if len(prompt) > 500:
+            print(f"... (总共 {len(prompt)} 字符，已截取)")
+        print(f"{'='*70}\n")
+        
         try:
             # 调用 Azure OpenAI 生成三语言内容
+            print(f"🤖 调用 Azure OpenAI...")
+            print(f"   模型: {self.deployment_name}")
+            print(f"   温度: 0.7")
+            print(f"   最大 tokens: 2000")
+            
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
                 messages=[
@@ -174,24 +202,81 @@ class AITemplateGenerator:
             # 解析响应
             result_text = response.choices[0].message.content
             
-            # ⭐ 添加调试输出
-            print(f"\n🤖 AI 原始响应:")
+            # ⭐ 保存响应到文件
+            try:
+                from pathlib import Path
+                log_dir = Path("outputs/ai_logs")
+                log_dir.mkdir(parents=True, exist_ok=True)
+                
+                package_name = package_info.get('package_name', 'unknown')
+                response_file = log_dir / f"response_{package_name}.json"
+                response_file.write_text(result_text, encoding='utf-8')
+                print(f"\n📥 AI 响应已保存到: {response_file}")
+                print(f"   文件大小: {len(result_text)} 字符")
+            except Exception as e:
+                print(f"⚠️ 保存响应失败: {e}")
+            
+            # ⭐ 打印完整的 AI 响应
+            print(f"\n{'='*70}")
+            print(f"📥 AI 原始响应 (JSON):")
             print(f"{'='*70}")
-            print(result_text[:1000] if len(result_text) > 1000 else result_text)
-            if len(result_text) > 1000:
-                print(f"... (响应较长，已截取前1000字符)")
+            print(result_text)
             print(f"{'='*70}\n")
             
             result = json.loads(result_text)
             
-            # ⭐ 检查描述字段
+            # ⭐ 检查并验证描述字段
+            print(f"\n{'='*70}")
+            print(f"🔍 验证 AI 生成的描述:")
+            print(f"{'='*70}")
+            
             if result.get('description_cn'):
-                desc_len = len(result['description_cn'])
-                print(f"✓ AI 生成的中文描述长度: {desc_len} 字符")
+                desc = result['description_cn']
+                desc_len = len(desc)
+                
+                print(f"✓ 中文描述长度: {desc_len} 字符")
+                print(f"\n📄 中文描述内容:")
+                print(f"{'─'*70}")
+                print(desc)
+                print(f"{'─'*70}\n")
+                
+                # 检查是否包含错误格式
+                bad_patterns = [
+                    ('- **PyPI 包名', '列表格式的包名'),
+                    ('- **版本', '列表格式的版本'),
+                    ('- **传输协议', '列表格式的传输协议'),
+                    ('这是一个\n\n-', '"这是一个"后直接跟列表'),
+                    ('PyPI 包名:', '包名字段'),
+                    ('版本:', '版本字段'),
+                    ('传输协议:', '传输协议字段'),
+                ]
+                
+                has_error = False
+                for pattern, reason in bad_patterns:
+                    if pattern in desc:
+                        has_error = True
+                        print(f"❌ 错误：描述包含禁止内容")
+                        print(f"   模式: {pattern}")
+                        print(f"   原因: {reason}")
+                        break
+                
                 if desc_len < 50:
-                    print(f"⚠️ 警告：描述太短！内容：{result['description_cn']}")
+                    has_error = True
+                    print(f"❌ 错误：描述太短（少于 50 字符）")
+                
+                if has_error:
+                    print(f"\n⚠️ AI 生成的描述格式不正确，将使用备用方案")
+                    print(f"{'='*70}\n")
+                    # 清空错误的描述，让后续使用备用方案
+                    result['description_cn'] = ""
+                    result['description_tw'] = ""
+                    result['description_en'] = ""
+                else:
+                    print(f"✅ 描述格式正确")
+                    print(f"{'='*70}\n")
             else:
                 print(f"❌ 警告：AI 响应中缺少 description_cn 字段")
+                print(f"{'='*70}\n")
             
             # 补充默认值
             return self._complete_template_info(result, package_info, package_type)
@@ -246,16 +331,38 @@ class AITemplateGenerator:
 
 {categories_text}
 
-⚠️ 特别注意：
-1. description 字段必须描述这个 MCP Server 的实际功能和用途，不要包含包名、版本、传输协议等元信息！
-2. 参考以下示例格式：
+⚠️ 特别注意（非常重要！）：
 
-【好的示例】：
-"这是一个用于访问 YouTube 数据的 MCP Server，提供视频搜索、频道信息查询等功能，帮助开发者快速集成 YouTube API。
+1. **description 字段绝对不能包含以下内容**：
+   - ❌ "这是一个" 开头后就列表
+   - ❌ PyPI 包名、NPM 包名
+   - ❌ 版本号、版本信息
+   - ❌ 传输协议（stdio、http等）
+   - ❌ 安装命令、运行命令
+   - ❌ 项目路径、GitHub 链接
+   - ❌ 列表格式的元信息
 
-可用工具：search - 搜索视频，get_channel_info - 获取频道信息，get_video_details - 获取视频详情。"
+2. **description 字段必须：**
+   - ✅ 直接描述功能："这是一个用于...的 MCP Server"
+   - ✅ 说明用途和应用场景
+   - ✅ 列出可用工具及功能
+   - ✅ 使用完整的句子，不要列表
 
-【错误示例】（不要这样写）：
+3. **示例对比**：
+
+【✅ 正确示例 - 职场搜索（无段落标题）】：
+"这是一个用于**职场搜索**的 MCP Server，提供全球工作机会的精准检索功能。该服务集成了多个主流招聘平台的数据，支持按地点、职位类型、薪资范围等条件进行高级筛选。
+
+用户可以通过设置查询条件，如工作类型、地点、语言等，快速找到符合需求的职位信息。这一服务适用于**职业规划**、**招聘管理**以及企业用工需求分析，为用户提供高效的职场信息获取方式。系统支持实时更新和智能推荐，确保信息的时效性和准确性。
+
+**可用工具：**
+1. **job_search** - 搜索全球范围内的工作机会，支持高级过滤条件和分页功能
+2. **search_companies** - 查询企业信息和招聘状态
+3. **get_job_details** - 获取职位详细信息包括薪资福利
+4. **save_job** - 收藏感兴趣的职位方便后续查看
+5. **get_salary_info** - 查询特定职位的薪资范围和市场行情"
+
+【❌ 错误示例】（绝对不要这样写）：
 "这是一个
 
 - **PyPI 包名**: bach-youtube
@@ -271,9 +378,9 @@ class AITemplateGenerator:
   "summary_cn": "一句话中文简体简介（20-50字，突出核心功能和价值）",
   "summary_tw": "一句話中文繁體簡介（請使用正確的繁體字，如：資料、檔案、網絡、伺服器等）",
   "summary_en": "One-sentence English summary (highlighting core features and value)",
-  "description_cn": "功能描述（简体中文，80-150字，必须严格按照以下两段结构：\n第一段（简短介绍）：2-3句话介绍这个 MCP Server 的实际功能、提供什么服务、适用于什么场景\n第二段（工具列表）：以「可用工具：」开头，列举工具名称和简要说明\n【重要禁止事项】绝对不要包含：包名、版本号、传输协议、安装步骤、运行命令、配置方法、环境要求、使用示例等技术细节和元信息！",
-  "description_tw": "功能描述（繁體中文，80-150字，必須嚴格按照以下兩段結構：\n第一段（簡短介紹）：2-3句話介紹這個 MCP Server 的實際功能、提供什麼服務、適用於什麼場景\n第二段（工具列表）：以「可用工具：」開頭，列舉工具名稱和簡要說明\n【重要禁止事項】絕對不要包含：包名、版本號、傳輸協議、安裝步驟、運行命令、配置方法、環境要求、使用示例等技術細節和元信息！\n請使用正確的繁體字）",
-  "description_en": "Description (English, 80-150 words, must strictly follow this two-paragraph structure:\nParagraph 1 (Brief Introduction): 2-3 sentences introducing the actual functionality of this MCP Server, what services it provides, and what scenarios it's suitable for\nParagraph 2 (Tool List): Starting with 'Available Tools:', enumerate tool names with brief descriptions\n【Critical Prohibitions】NEVER include: package name, version number, transport protocol, installation steps, running commands, configuration methods, environment requirements, usage examples, or any technical details and meta information!",
+  "description_cn": "完整的功能描述（简体中文，200-400字，使用 Markdown 格式）。\n\n格式要求（使用 Markdown，不要显示段落标题）：\n\n第1段（2-3句话）：\n这是一个用于[功能]的 MCP Server，提供[核心服务]。详细说明功能特点、适用场景、解决的问题。\n\n第2段（3-5句话）：\n详细描述主要功能和特性。说明使用场景和应用价值。突出优势和亮点。\n\n第3段 - 工具列表：\n**可用工具：**\n1. **工具名1** - 功能说明\n2. **工具名2** - 功能说明\n3. **工具名3** - 功能说明\n（列出所有工具，每个工具独占一行，使用有序列表）\n\n⚠️ 重要：不要在输出中包含「第一段」「第二段」「第三段」「功能概述」「详细功能」等段落标题！\n⚠️ Markdown 格式要求：\n- 段落之间用空行分隔\n- 重要内容用 **加粗**\n- 工具列表前加 **可用工具：** 标题\n- 工具列表使用有序列表（1. 2. 3.），工具名用 **加粗**\n- 整体排版清晰美观\n\n⚠️ 绝对禁止：包名、版本号、传输协议、安装命令等技术元信息",
+  "description_tw": "完整的功能描述（繁體中文，200-400字，使用 Markdown 格式）。\n\n格式要求（使用 Markdown，不要顯示段落標題）：\n\n第1段（2-3句話）：\n這是一個用於[功能]的 MCP Server，提供[核心服務]。詳細說明功能特點、適用場景、解決的問題。\n\n第2段（3-5句話）：\n詳細描述主要功能和特性。說明使用場景和應用價值。突出優勢和亮點。\n\n第3段 - 工具列表：\n**可用工具：**\n1. **工具名1** - 功能說明\n2. **工具名2** - 功能說明\n3. **工具名3** - 功能說明\n（列出所有工具，每個工具獨占一行，使用有序列表）\n\n⚠️ 重要：不要在輸出中包含「第一段」「第二段」「第三段」「功能概述」「詳細功能」等段落標題！\n⚠️ Markdown 格式要求：\n- 段落之間用空行分隔\n- 重要內容用 **加粗**\n- 工具列表前加 **可用工具：** 標題\n- 工具列表使用有序列表（1. 2. 3.），工具名用 **加粗**\n- 整體排版清晰美觀\n\n⚠️ 絕對禁止：包名、版本號、傳輸協議、安裝命令等技術元信息\n⚠️ 請使用正確的繁體字",
+  "description_en": "Complete functional description (English, 200-400 words, use Markdown format).\n\nFormat (use Markdown, NO section titles):\n\nParagraph 1 (2-3 sentences):\nThis is an MCP Server for [function], providing [core services]. Explain features, use cases, and problems it solves.\n\nParagraph 2 (3-5 sentences):\nDescribe main functionalities and characteristics. Explain usage scenarios and application value. Highlight advantages and key features.\n\nParagraph 3 - Tool list:\n**Available Tools:**\n1. **tool_name1** - description\n2. **tool_name2** - description\n3. **tool_name3** - description\n(List ALL tools, one per line, use ordered list)\n\n⚠️ IMPORTANT: Do NOT include section titles like \"Paragraph 1\", \"Overview\", \"Detailed Features\" in your output!\n⚠️ Markdown requirements:\n- Separate paragraphs with blank lines\n- Use **bold** for important content\n- Add **Available Tools:** title before tool list\n- Tool list using ordered list (1. 2. 3.), tool names in **bold**\n- Clean and beautiful layout\n\n⚠️ Strictly prohibited: package name, version, protocol, commands, etc.",
   "route_prefix": "建议的路由前缀（仅小写字母和数字，不能以数字开头，不超过10字符，如 filesearch）",
   "category_id": "从上面分类列表中选择最合适的ID（只填写ID，如 1、2、3 等）"
 }}
@@ -294,15 +401,24 @@ class AITemplateGenerator:
    - bachstudio → 巴赫工作室
    - BACH → 巴赫
    例如：bachai-data-analysis-mcp → 巴赫数据分析服务器
-4. **描述格式要求（非常重要）**：
-   - 必须保持简洁，80-150字即可
-   - **必须严格按照两段式结构**：
-     * 第一段（简短介绍）：2-3句话介绍这个 MCP 是什么、主要用途和适用场景
-     * 第二段（工具列表）：以"可用工具："开头，列出工具名称和简要说明
-   - 从 README 中提取工具信息，但只保留工具名称和功能，不要复制安装、配置、使用说明等内容
-   - ⚠️ 禁止包含以下内容：安装步骤、运行命令、配置方法、环境要求、使用示例、引流语句等
-   - 段落之间用换行分隔
-   - 不要自己添加任何引流性的开场白或结束语
+4. **描述格式要求（非常重要 - 使用 Markdown）**：
+   - 内容丰富详实，200-400字
+   - **必须使用 Markdown 格式，增强可读性**
+   - **必须严格按照三段式结构**：
+     * 第一段（功能概述）：2-3句话介绍核心服务，重点词汇用 **加粗**
+     * 第二段（详细功能）：3-5句话详细说明功能特点，重点内容用 **加粗**
+     * 第三段（工具列表）：必须使用 Markdown 列表格式
+   - ⚠️ Markdown 格式规范：
+     * 段落之间用空行分隔（双换行）
+     * 重要关键词用 **加粗**（如：**职场搜索**、**社交媒体营销**）
+     * 工具列表格式：**可用工具：** 后换行，每个工具用 - **工具名** - 功能说明
+     * 工具名必须用 **加粗**
+   - ⚠️ 工具列表要求：
+     * 必须包含 README 中的所有工具，不要遗漏
+     * 每个工具独占一行，格式统一
+     * 每个工具都要有清晰的功能说明
+   - ⚠️ 禁止包含：安装步骤、运行命令、配置方法、环境要求、使用示例、包名、版本号、传输协议等
+   - 文字要吸引人、专业、流畅
 5. route_prefix 规则：
    - 只能包含小写字母(a-z)和数字(0-9)
    - 不能以数字开头
@@ -347,6 +463,41 @@ class AITemplateGenerator:
         
         print(f"✅ Logo URL: {logo_url}")
         
+        # ⭐ 生成备用描述（如果 AI 生成的描述为空或格式错误）
+        desc_cn = ai_result.get('description_cn', '')
+        desc_tw = ai_result.get('description_tw', '')
+        desc_en = ai_result.get('description_en', '')
+        
+        # ⭐ 清理段落标题（防止 AI 输出段落标题）
+        import re
+        unwanted_titles = [
+            r'\*\*第[一二三1-3]段.*?\*\*[：:：\s]*',  # **第一段 - 功能概述**：
+            r'第[一二三1-3]段.*?[：:：\s]*',  # 第一段：
+            r'\*\*功能概述\*\*[：:：\s]*',
+            r'\*\*详细功能\*\*[：:：\s]*',
+            r'\*\*詳細功能\*\*[：:：\s]*',
+            r'\*\*Overview\*\*[：:：\s]*',
+            r'\*\*Detailed Features\*\*[：:：\s]*',
+        ]
+        
+        for pattern in unwanted_titles:
+            desc_cn = re.sub(pattern, '', desc_cn, flags=re.IGNORECASE)
+            desc_tw = re.sub(pattern, '', desc_tw, flags=re.IGNORECASE)
+            desc_en = re.sub(pattern, '', desc_en, flags=re.IGNORECASE)
+        
+        # 清理多余的空行
+        desc_cn = re.sub(r'\n{3,}', '\n\n', desc_cn).strip()
+        desc_tw = re.sub(r'\n{3,}', '\n\n', desc_tw).strip()
+        desc_en = re.sub(r'\n{3,}', '\n\n', desc_en).strip()
+        
+        if not desc_cn or len(desc_cn) < 50:
+            print(f"⚠️ 使用备用描述方案")
+            # 从包名提取功能关键词
+            clean_name = package_name.replace('bach-', '').replace('bachai-', '').replace('_', ' ').replace('-', ' ')
+            desc_cn = f"这是一个用于 {clean_name} 的 MCP Server，提供相关的功能和服务接口。\n\n可用工具：请查看项目文档了解具体工具列表。"
+            desc_tw = f"這是一個用於 {clean_name} 的 MCP Server，提供相關的功能和服務接口。\n\n可用工具：請查看項目文檔了解具體工具列表。"
+            desc_en = f"This is an MCP Server for {clean_name}, providing related functionality and service interfaces.\n\nAvailable Tools: Please refer to the project documentation for the specific tool list."
+        
         return {
             # 名称字段
             'name': ai_result.get('name_cn', ai_result.get('name', package_name)),
@@ -358,11 +509,11 @@ class AITemplateGenerator:
             'summary_zh_cn': ai_result.get('summary_cn', ai_result.get('summary', '')),
             'summary_zh_tw': ai_result.get('summary_tw', ai_result.get('summary_cn', '')),
             'summary_en': ai_result.get('summary_en', ''),
-            # 描述字段（详细）
-            'description': ai_result.get('description_cn', ai_result.get('description', '')),
-            'description_zh_cn': ai_result.get('description_cn', ai_result.get('description', '')),
-            'description_zh_tw': ai_result.get('description_tw', ai_result.get('description_cn', '')),
-            'description_en': ai_result.get('description_en', ''),
+            # 描述字段（详细） - 使用验证后的描述
+            'description': desc_cn,
+            'description_zh_cn': desc_cn,
+            'description_zh_tw': desc_tw,
+            'description_en': desc_en,
             # 其他字段
             'command': command,
             'route_prefix': route_prefix,

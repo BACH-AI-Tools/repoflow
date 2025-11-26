@@ -77,6 +77,18 @@ class AgentPlatformClient:
         AgentTesterLogger.log(f"   📱 手机号: {phone}")
         AgentTesterLogger.log(f"   🔑 验证码: {validation_code}")
         
+        # ⭐ 打印等效的 curl 命令
+        AgentTesterLogger.log(f"\n   🔧 等效 curl 命令:")
+        import json
+        curl_cmd = f"""curl -X POST '{url}' \\
+  -H 'Accept: application/json, text/plain, */*' \\
+  -H 'Content-Type: application/json;charset=UTF-8' \\
+  -H 'Language: ch_cn' \\
+  -H 'Cache-Control: no-cache' \\
+  -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' \\
+  -d '{json.dumps(payload)}'"""
+        AgentTesterLogger.log(f"{curl_cmd}\n")
+        
         for attempt in range(max_retries):
             try:
                 response = requests.post(url, headers=headers, json=payload, timeout=30)

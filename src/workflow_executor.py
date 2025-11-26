@@ -731,53 +731,16 @@ Output only the introduction text, no explanations."""
         print(f"步骤: AI 生成模板")
         print(f"{'='*60}")
         
-        # 首先尝试加载多语言 README 文件
-        print(f"\n📚 尝试加载多语言 README 文件...")
-        multilang_readmes = self._load_multilang_readmes()
+        # ⭐ 修改逻辑：总是使用 AI 生成 EMCP 描述
+        # README 文件用于传给 AI，而不是直接使用
+        print(f"\n📚 EMCP 描述生成策略:")
+        print(f"   1. 读取项目 README（用于传给 AI）")
+        print(f"   2. AI 从 README 中提取精华")
+        print(f"   3. 生成简洁的 EMCP 描述")
+        print(f"   4. GitHub 上保持使用完整 README")
         
-        if multilang_readmes:
-            print(f"✅ 直接使用 README 文件内容作为描述（跳过 AI 生成）")
-            self.template_data = multilang_readmes
-            print(f"  中文: {multilang_readmes.get('name_zh_cn', '')}")
-            print(f"  繁体: {multilang_readmes.get('name_zh_tw', '')}")
-            print(f"  英文: {multilang_readmes.get('name_en', '')}")
-            
-            # 检测环境变量配置（如果还没有配置）
-            if not hasattr(self, 'env_vars_config') or not self.env_vars_config:
-                print(f"\n🔍 检测环境变量配置...")
-                from src.env_var_detector import EnvVarDetector
-                detector = EnvVarDetector()
-                env_vars = detector.detect_from_project(self.project_path)
-                
-                if env_vars:
-                    print(f"   发现 {len(env_vars)} 个环境变量需要配置")
-                    for var in env_vars:
-                        required_text = "必需" if var['required'] else "可选"
-                        print(f"   - {var['name']}: {var['description']} ({required_text})")
-                    
-                    from src.env_var_dialog import EnvVarDialog
-                    import tkinter as tk
-                    root = self.parent if hasattr(self, 'parent') else tk._default_root
-                    dialog = EnvVarDialog(root, env_vars, self.package_name)
-                    configured_vars = dialog.show()
-                    
-                    if not configured_vars:
-                        print(f"❌ 用户取消了环境变量配置")
-                        raise Exception("必须配置环境变量才能发布到 EMCP")
-                    
-                    self.env_vars_config = configured_vars
-                    print(f"✅ 用户已配置 {len(configured_vars)} 个环境变量")
-                else:
-                    print(f"   ✅ 未检测到需要配置的环境变量")
-                    self.env_vars_config = []
-            else:
-                print(f"\n✅ 使用预配置的环境变量 ({len(self.env_vars_config)} 个)")
-            
-            print(f"✅ 步骤完成\n")
-            return
-        
-        # 如果没有找到 README 文件，继续原有的 AI 生成流程
-        print(f"ℹ️ 未找到多语言 README 文件，使用 AI 生成")
+        # 不再使用 _load_multilang_readmes 直接作为描述
+        # 而是继续执行 AI 生成流程
         
         # 检测环境变量配置需求（如果还没有配置）
         if not hasattr(self, 'env_vars_config') or not self.env_vars_config:
@@ -1057,30 +1020,67 @@ Output only the introduction text, no explanations."""
                 if len(clean_desc) > 500:
                     clean_desc = clean_desc[:500] + '...'
                 
-                # 根据包类型选择设计元素
-                type_elements = {
-                    'python': 'Python、代码、蓝黄配色',
-                    'pypi': 'Python、代码、蓝黄配色',
-                    'node.js': 'JavaScript、Node.js、绿色',
-                    'npm': 'JavaScript、Node.js、绿色',
-                    'docker': '容器、鲸鱼、蓝色'
+                # ⭐ 智能提取关键词，而不是只用语言类型
+                # 从包名和描述中提取关键词
+                import re
+                keywords = []
+                
+                # 从包名提取关键词（移除前缀）
+                package_keywords = self.package_name.lower()
+                for prefix in ['bach-', 'bachai-', '@bach/', '@bachai/']:
+                    package_keywords = package_keywords.replace(prefix, '')
+                
+                # 提取有意义的词
+                words = re.findall(r'[a-z]+', package_keywords)
+                keywords.extend([w for w in words if len(w) > 3][:3])  # 取前3个有意义的词
+                
+                # 从描述中提取关键功能词
+                desc_lower = clean_desc.lower()
+                feature_keywords = {
+                    'instagram': ['Instagram', '社交媒体', '橙色渐变'],
+                    'youtube': ['YouTube', '视频', '红色'],
+                    'twitter': ['Twitter', '社交', '蓝色'],
+                    'facebook': ['Facebook', '社交网络', '蓝色'],
+                    'github': ['GitHub', '代码托管', '黑白'],
+                    'search': ['搜索', '查询', '放大镜'],
+                    'file': ['文件', '文档', '文件夹'],
+                    'data': ['数据', '分析', '图表'],
+                    'ai': ['AI', '人工智能', '科技'],
+                    'web': ['网页', '浏览器', '互联网'],
+                    'crypto': ['加密货币', '区块链', '金融'],
+                    'weather': ['天气', '气象', '云'],
+                    'news': ['新闻', '资讯', '报纸'],
+                    'email': ['邮件', '通讯', '信封'],
+                    'chat': ['聊天', '对话', '消息'],
                 }
-                elements = type_elements.get(self.package_type or 'unknown', '代码、工具、科技')
+                
+                design_elements = []
+                for keyword, elements in feature_keywords.items():
+                    if keyword in desc_lower or keyword in package_keywords:
+                        design_elements.extend(elements)
+                        break
+                
+                # 如果没有匹配到特定功能，使用通用元素
+                if not design_elements:
+                    design_elements = ['MCP', '服务器', '连接', '现代科技']
+                
+                elements_text = '、'.join(design_elements[:4])
                 
                 # 构建提示词
                 prompt = f"""{self.package_name} Logo 设计
 
 一个专业的 MCP 服务器标志
 
-包描述：
-{clean_desc}
+功能描述：
+{clean_desc[:300]}
 
 设计要求：
-- 主题：{elements}
-- 风格：扁平化、现代、简洁、专业
-- 布局：方形图标，适合作为软件图标
-- 配色：专业的配色方案，2-3种颜色
-- 要求：干净清晰的现代科技 logo，适合 MCP 服务器标识使用"""
+- 核心主题：{elements_text}
+- 图标风格：扁平化、现代、简洁、专业、图标化
+- 不要包含：代码符号、终端窗口、命令行界面
+- 布局：方形图标，适合作为应用图标
+- 配色：专业的配色方案，与主题相关
+- 要求：干净清晰的图标设计，一眼就能看出是什么功能"""
                 
                 print(f"   提示词长度: {len(prompt)} 字符")
                 print(f"   包名: {self.package_name}")
