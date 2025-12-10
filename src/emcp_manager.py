@@ -36,12 +36,10 @@ class HTTPLogger:
         if payload:
             cls.log(f"📦 请求参数:")
             payload_json = json.dumps(payload, indent=2, ensure_ascii=False)
-            newline = '\n'
-            payload_lines = payload_json.split(newline)
-            for line in payload_lines[:100]:  # 限制行数
+            for line in payload_json.split('\n')[:100]:  # 限制行数
                 cls.log(f"   {line}")
-            if len(payload_lines) > 100:
-                cls.log(f"   ... (省略 {len(payload_lines) - 100} 行)")
+            if len(payload_json.split('\n')) > 100:
+                cls.log(f"   ... (省略 {len(payload_json.split('\n')) - 100} 行)")
         cls.log(f"{'='*70}\n")
     
     @classmethod
@@ -52,12 +50,10 @@ class HTTPLogger:
         if response_data:
             cls.log(f"📋 响应数据:")
             response_json = json.dumps(response_data, indent=2, ensure_ascii=False)
-            newline = '\n'
-            response_lines = response_json.split(newline)
-            for line in response_lines[:100]:
+            for line in response_json.split('\n')[:100]:
                 cls.log(f"   {line}")
-            if len(response_lines) > 100:
-                cls.log(f"   ... (省略 {len(response_lines) - 100} 行)")
+            if len(response_json.split('\n')) > 100:
+                cls.log(f"   ... (省略 {len(response_json.split('\n')) - 100} 行)")
         elif response_text:
             cls.log(f"📋 响应文本:")
             for line in response_text[:500].split('\n'):
@@ -88,17 +84,20 @@ class EMCPManager:
         self.session_key = None
         self.user_info = None
     
-    def login(self, phone_number: str, validation_code: str) -> Dict:
+    def login(self, phone_number: str, validation_code: str, max_retries: int = 3, fallback_token: str = None) -> Dict:
         """
-        登录 EMCP 平台
+        登录 EMCP 平台（带重试机制）
         
         Args:
             phone_number: 手机号
             validation_code: 验证码
+            max_retries: 最大重试次数（默认3次）
             
         Returns:
             用户信息字典
         """
+        import time
+        
         url = f"{self.base_url}/api/Login/login"
         
         payload = {
@@ -106,35 +105,123 @@ class EMCPManager:
             "validation_code": validation_code
         }
         
-        try:
-            # 记录请求
-            log_http_request("POST", url, payload=payload)
-            
-            response = requests.post(url, json=payload, timeout=10)
-            
-            # 记录响应
+        # 完整的请求头（参考浏览器请求）
+        headers = {
+            'Accept': 'application/json, text/plain, */*',
+            'Content-Type': 'application/json',
+            'Language': 'ch_cn',  # 重要：语言设置
+            'Cache-Control': 'no-cache',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+        
+        for attempt in range(max_retries):
             try:
+                # 记录请求
+                log_http_request("POST", url, payload=payload)
+                
+                response = requests.post(url, json=payload, headers=headers, timeout=30)
+                
+                # 记录响应
+                try:
+                    data = response.json()
+                    log_http_response(response.status_code, response_data=data)
+                except:
+                    log_http_response(response.status_code, response_text=response.text)
+                
+                # 处理 502 Bad Gateway
+                if response.status_code == 502:
+                    if attempt < max_retries - 1:
+                        wait_time = (attempt + 1) * 5  # 5秒、10秒、15秒
+                        print(f"   ⚠️ 502 Bad Gateway，{wait_time}秒后重试... (尝试 {attempt + 1}/{max_retries})")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        raise Exception(f"登录失败（502）: {response.text}")
+                
+                response.raise_for_status()
+                
+                if data.get('err_code') != 0:
+                    raise Exception(f"登录失败: {data.get('err_message', '未知错误')}")
+                
+                # 保存 session key 和用户信息
+                body = data.get('body', {})
+                self.session_key = body.get('session_key')
+                self.user_info = body
+                
+                return body
+                
+            except requests.exceptions.Timeout:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 5
+                    print(f"   ⚠️ 请求超时，{wait_time}秒后重试... (尝试 {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    raise Exception("请求超时，请检查网络连接")
+            except requests.exceptions.RequestException as e:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 5
+                    print(f"   ⚠️ 网络请求失败: {e}，{wait_time}秒后重试... (尝试 {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    raise Exception(f"网络请求失败: {str(e)}")
+        
+        # 如果所有重试都失败，尝试使用备用 token
+        if fallback_token:
+            print(f"   🔄 登录失败，尝试使用备用 token...")
+            return self._use_fallback_token(fallback_token)
+        
+        raise Exception("登录失败：已达到最大重试次数")
+    
+    def _use_fallback_token(self, token: str) -> Dict:
+        """
+        使用备用 token 登录
+        
+        Args:
+            token: 备用 session token
+            
+        Returns:
+            用户信息字典
+        """
+        print(f"   🔑 使用备用 token: {token[:20]}...")
+        
+        # 直接设置 session_key
+        self.session_key = token
+        
+        # 尝试获取用户信息以验证 token
+        try:
+            url = f"{self.base_url}/api/User/get_user_info"
+            headers = {
+                'Accept': 'application/json, text/plain, */*',
+                'Content-Type': 'application/json',
+                'Language': 'ch_cn',
+                'token': token,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
                 data = response.json()
-                log_http_response(response.status_code, response_data=data)
-            except:
-                log_http_response(response.status_code, response_text=response.text)
+                if data.get('err_code') == 0:
+                    body = data.get('body', {})
+                    self.user_info = body
+                    print(f"   ✅ 备用 token 有效")
+                    print(f"   👤 用户: {body.get('user_name', 'Unknown')}")
+                    print(f"   🆔 用户ID: {body.get('uid', 'Unknown')}")
+                    return body
             
-            response.raise_for_status()
+            # 如果获取失败，仍然使用这个 token，但用户信息为空
+            print(f"   ⚠️ 无法获取用户信息，但仍使用备用 token")
+            self.user_info = {"uid": 51, "user_name": "备用账号"}
+            return self.user_info
             
-            if data.get('err_code') != 0:
-                raise Exception(f"登录失败: {data.get('err_message', '未知错误')}")
-            
-            # 保存 session key 和用户信息
-            body = data.get('body', {})
-            self.session_key = body.get('session_key')
-            self.user_info = body
-            
-            return body
-            
-        except requests.exceptions.Timeout:
-            raise Exception("请求超时，请检查网络连接")
-        except requests.exceptions.RequestException as e:
-            raise Exception(f"网络请求失败: {str(e)}")
+        except Exception as e:
+            print(f"   ⚠️ 验证备用 token 失败: {e}")
+            # 仍然使用这个 token
+            self.user_info = {"uid": 51, "user_name": "备用账号"}
+            return self.user_info
     
     def _get_headers(self) -> Dict[str, str]:
         """获取请求头（包含 token）"""
@@ -241,7 +328,7 @@ class EMCPManager:
                     
                     # 尝试从配置获取手机号
                     try:
-                        from config_manager import ConfigManager
+                        from src.config_manager import ConfigManager
                         config_mgr = ConfigManager()
                         credentials = config_mgr.load_emcp_credentials()
                         
@@ -371,8 +458,8 @@ class EMCPManager:
             # 需要有 Azure OpenAI 客户端
             if not hasattr(self, '_ai_fixer'):
                 # 尝试创建 AI 修复器
-                from config_manager import ConfigManager
-                from error_fixer import AIErrorFixer
+                from src.config_manager import ConfigManager
+                from src.error_fixer import AIErrorFixer
                 from openai import AzureOpenAI
                 
                 config_mgr = ConfigManager()
@@ -558,21 +645,41 @@ class EMCPManager:
         Returns:
             模板数据字典（供用户编辑）
         """
-        # 读取 README.md
+        # 读取完整的 README.md
         readme_path = project_path / "README.md"
+        readme_content = ""
         description = ""
         summary = f"{project_path.name} MCP Server"
         
         if readme_path.exists():
             try:
                 readme_content = readme_path.read_text(encoding='utf-8')
-                # 提取第一段作为简介
+                
+                # 提取标题和简介
                 lines = [l.strip() for l in readme_content.split('\n') if l.strip()]
-                if len(lines) > 1:
-                    summary = lines[1][:200]  # 第一行通常是标题，第二行是简介
-                description = readme_content[:1000]  # 限制长度
-            except:
+                
+                # 智能提取简介
+                for i, line in enumerate(lines):
+                    # 跳过第一行标题
+                    if i == 0 and line.startswith('#'):
+                        continue
+                    # 找到第一个非标题的段落作为简介
+                    if not line.startswith('#') and not line.startswith('```') and len(line) > 20:
+                        summary = line[:300]  # 取前300字符作为简介
+                        break
+                
+                # 使用完整的 README 作为详细描述（保留格式）
+                description = readme_content  # ✅ 不再限制长度，使用完整内容
+                
+                print(f"📋 已读取 README.md: {len(readme_content)} 字符")
+                print(f"📝 简介: {summary[:100]}...")
+                print(f"📄 描述: {len(description)} 字符")
+                
+            except Exception as e:
+                print(f"⚠️  读取 README.md 失败: {e}")
                 pass
+        else:
+            print(f"⚠️  未找到 README.md")
         
         # 项目名称
         project_name = project_path.name.replace('-', ' ').replace('_', ' ').title()
@@ -594,8 +701,11 @@ class EMCPManager:
             # NPM 包：npx + 包名
             command = f"npx {package_name}"
         elif package_type_name == 'pypi':
-            # PyPI 包：uvx + 包名
-            command = f"uvx {package_name}"
+            # PyPI 包：使用 uvx --from 格式
+            # 包名用横杠，模块名用下划线
+            module_name = package_name.replace('-', '_')
+            # 这里暂时使用 latest，实际版本会在 WorkflowExecutor 中设置
+            command = f"uvx --from {package_name}@latest {module_name}"
         elif package_type_name == 'deno':
             # Deno 包：deno + 包名
             command = f"deno {package_name}"
@@ -693,7 +803,7 @@ class EMCPManager:
             if response.status_code == 401 and auto_login_on_401:
                 HTTPLogger.log(f"\n🔐 检测到 401，自动登录并重试...")
                 try:
-                    from config_manager import ConfigManager
+                    from src.config_manager import ConfigManager
                     config_mgr = ConfigManager()
                     credentials = config_mgr.load_emcp_credentials()
                     
@@ -744,9 +854,10 @@ class EMCPManager:
         
         try:
             # 记录请求
-            log_http_request("POST", url, headers=self._get_headers(), payload=template_data)
+            log_http_request("PUT", url, headers=self._get_headers(), payload=template_data)
             
-            response = requests.post(
+            # ⭐ 使用 PUT 方法（不是 POST）
+            response = requests.put(
                 url,
                 json=template_data,
                 headers=self._get_headers(),
@@ -867,7 +978,7 @@ class EMCPManager:
             if response.status_code == 401 and auto_login_on_401:
                 HTTPLogger.log(f"\n🔐 检测到 401，自动登录并重试...")
                 try:
-                    from config_manager import ConfigManager
+                    from src.config_manager import ConfigManager
                     config_mgr = ConfigManager()
                     credentials = config_mgr.load_emcp_credentials()
                     
@@ -947,7 +1058,7 @@ class EMCPManager:
             if response.status_code == 401 and auto_login_on_401:
                 HTTPLogger.log(f"\n🔐 检测到 401，自动登录并重试...")
                 try:
-                    from config_manager import ConfigManager
+                    from src.config_manager import ConfigManager
                     config_mgr = ConfigManager()
                     credentials = config_mgr.load_emcp_credentials()
                     
@@ -1000,8 +1111,6 @@ class EMCPManager:
             HTTPLogger.log(f"⚠️ 获取分类列表失败: {e}，使用默认分类")
             # 失败时返回默认分类
             return "可选的分类列表：\n- ID: 1, 名称: 数据分析\n- ID: 2, 名称: 文件处理\n- ID: 3, 名称: 开发工具\n"
-
-
 
 
 

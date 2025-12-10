@@ -102,6 +102,13 @@ class UnifiedConfigManager:
                 "api_url": "https://mcp-on-edge.edgeone.app/kv/set"
             },
             
+            # SonarQube 配置
+            "sonarqube": {
+                "enabled": True,
+                "base_url": "https://sonar.kaleido.guru",
+                "token": ""
+            },
+            
             # PyPI 配置
             "pypi": {
                 "mirror_url": "https://pypi.tuna.tsinghua.edu.cn/simple"
@@ -227,6 +234,34 @@ class UnifiedConfigManager:
         config["jimeng"]["enabled"] = enabled
         return self.save_config(config)
     
+    def set_jimeng_config(self, mcp_url: str, emcp_key: str, emcp_usercode: str) -> bool:
+        """设置即梦 AI 完整配置（MCP 方式 - 已废弃）"""
+        config = self.load_config()
+        if "jimeng" not in config:
+            config["jimeng"] = {}
+        config["jimeng"]["mcp_url"] = mcp_url
+        config["jimeng"]["emcp_key"] = emcp_key
+        config["jimeng"]["emcp_usercode"] = emcp_usercode
+        return self.save_config(config)
+    
+    def set_jimeng_api_config(self, access_key: str, secret_key: str) -> bool:
+        """设置即梦 API 配置（火山引擎 AK/SK）"""
+        config = self.load_config()
+        if "jimeng" not in config:
+            config["jimeng"] = {}
+        config["jimeng"]["access_key"] = access_key
+        config["jimeng"]["secret_key"] = secret_key
+        return self.save_config(config)
+    
+    def get_jimeng_api_credentials(self) -> tuple:
+        """获取即梦 API 凭证 (access_key, secret_key)"""
+        config = self.load_config()
+        jimeng = config.get("jimeng", {})
+        return (
+            jimeng.get("access_key", ""),
+            jimeng.get("secret_key", "")
+        )
+    
     # ===== EdgeOne 配置 =====
     
     def get_edgeone_config(self) -> Dict[str, Any]:
@@ -240,6 +275,35 @@ class UnifiedConfigManager:
         if "edgeone" not in config:
             config["edgeone"] = {}
         config["edgeone"]["enabled"] = enabled
+        return self.save_config(config)
+    
+    # ===== SonarQube 配置 =====
+    
+    def get_sonarqube_config(self) -> Dict[str, Any]:
+        """获取 SonarQube 配置"""
+        config = self.load_config()
+        return config.get("sonarqube", {
+            "enabled": True,
+            "base_url": "https://sonar.kaleido.guru",
+            "token": ""
+        })
+    
+    def set_sonarqube_config(self, base_url: str, token: str, enabled: bool = True) -> bool:
+        """设置 SonarQube 配置"""
+        config = self.load_config()
+        config["sonarqube"] = {
+            "enabled": enabled,
+            "base_url": base_url,
+            "token": token
+        }
+        return self.save_config(config)
+    
+    def set_sonarqube_enabled(self, enabled: bool) -> bool:
+        """设置 SonarQube 启用状态"""
+        config = self.load_config()
+        if "sonarqube" not in config:
+            config["sonarqube"] = {}
+        config["sonarqube"]["enabled"] = enabled
         return self.save_config(config)
     
     # ===== PyPI 配置 =====

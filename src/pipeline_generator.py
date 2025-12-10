@@ -7,6 +7,15 @@ import json
 class PipelineGenerator:
     """生成不同类型的 CI/CD Pipeline 配置"""
     
+    def __init__(self, org_name: str = "BACH-AI-Tools"):
+        """
+        初始化 Pipeline 生成器
+        
+        Args:
+            org_name: GitHub 组织名称，用于生成 SonarQube project key
+        """
+        self.org_name = org_name
+    
     def generate(self, pipeline_type: str, project_path: Path):
         """
         生成指定类型的 Pipeline
@@ -25,6 +34,57 @@ class PipelineGenerator:
             raise ValueError(f"不支持的 Pipeline 类型: {pipeline_type}")
         
         generators[pipeline_type](project_path)
+        
+        # 同时生成 SonarQube workflow
+        self._generate_sonar_pipeline(project_path)
+    
+    def _generate_sonar_pipeline(self, project_path: Path):
+        """生成 SonarQube 扫描 Pipeline (GitHub Actions)"""
+        workflow_dir = project_path / '.github' / 'workflows'
+        workflow_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 生成 project key：组织名_仓库名
+        repo_name = project_path.name
+        project_key = f"{self.org_name}_{repo_name}"
+        
+        # 使用四个花括号来转义，确保生成正确的 ${{ secrets.XXX }}
+        workflow_content = f'''name: SonarQube Analysis
+
+on:
+  workflow_dispatch:  # 支持手动触发
+  push:
+    branches:
+      - main
+      - master
+      - develop
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  sonarqube:
+    name: SonarQube Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v3
+        env:
+          SONAR_TOKEN: ${{{{ secrets.SONAR_TOKEN }}}}
+          SONAR_HOST_URL: ${{{{ secrets.SONAR_HOST_URL }}}}
+        with:
+          args: >
+            -Dsonar.projectKey={project_key}
+            -Dsonar.projectName={repo_name}
+'''
+        
+        workflow_file = workflow_dir / 'sonar.yml'
+        workflow_file.write_text(workflow_content, encoding='utf-8')
+        print(f"📝 生成 SonarQube workflow: sonar.yml (project_key: {project_key})")
     
     def _generate_docker_pipeline(self, project_path: Path):
         """生成 Docker Pipeline (GitHub Actions)"""
@@ -376,8 +436,8 @@ jobs:
         # 生成 setup.py（如果不存在）
         setup_py = project_path / 'setup.py'
         if not setup_py.exists():
-            # 自动添加 bachai 前缀避免包名冲突
-            package_name = f"bachai-{project_path.name.lower()}"
+            # 使用原始项目名作为包名，不自动添加前缀
+            package_name = project_path.name.lower()
             setup_content = f'''"""Setup script for {project_path.name}"""
 
 from setuptools import setup, find_packages
@@ -411,8 +471,8 @@ setup(
         # 生成 pyproject.toml（现代 Python 打包）
         pyproject_toml = project_path / 'pyproject.toml'
         if not pyproject_toml.exists():
-            # 自动添加 bachai 前缀避免包名冲突
-            package_name = f"bachai-{project_path.name.lower()}"
+            # 使用原始项目名作为包名，不自动添加前缀
+            package_name = project_path.name.lower()
             toml_content = f'''[build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"

@@ -140,7 +140,7 @@ class PackageFetcher:
     
     def fetch_pypi(self, package_name: str) -> Dict:
         """
-        从 PyPI 获取包信息
+        从 PyPI 获取包信息 - 直接检查项目页面
         
         Args:
             package_name: PyPI 包名
@@ -149,39 +149,45 @@ class PackageFetcher:
             包信息字典
         """
         try:
-            url = f"https://pypi.org/pypi/{package_name}/json"
+            # ⭐ 直接检查项目页面是否存在（最可靠的方法）
+            project_url = f"https://pypi.org/project/{package_name}/"
             
             # 记录请求
-            log_package_api_request("GET", url)
+            log_package_api_request("HEAD", project_url)
             
-            response = requests.get(url, timeout=self.timeout)
+            # 使用 HEAD 请求检查页面是否存在（更快）
+            response = requests.head(project_url, timeout=self.timeout, allow_redirects=True)
             
-            # 记录响应
-            try:
-                data = response.json()
-                log_package_api_response(response.status_code, data={'info': data.get('info', {})})
-            except:
-                PackageLogger.log(f"响应状态: {response.status_code}")
-            
-            response.raise_for_status()
-            info = data.get('info', {})
-            
-            return {
-                'type': 'pypi',
-                'package_name': package_name,
-                'url': f"https://pypi.org/project/{package_name}",
-                'info': {
-                    'name': info.get('name', package_name),
-                    'version': info.get('version', '1.0.0'),
-                    'summary': info.get('summary', ''),
-                    'description': info.get('description', ''),
-                    'author': info.get('author', ''),
-                    'license': info.get('license', ''),
-                    'home_page': info.get('home_page', ''),
-                    'project_urls': info.get('project_urls', {}),
+            if response.status_code == 200:
+                # 包存在！
+                log_package_api_response(response.status_code)
+                PackageLogger.log(f"✅ 包已发布")
+                
+                return {
+                    'type': 'pypi',
+                    'package_name': package_name,
+                    'url': project_url,
+                    'info': {
+                        'name': package_name,
+                        'version': '已发布',
+                        'summary': f'{package_name} - PyPI package',
+                        'description': '',
+                        'readme': '',
+                        'author': '',
+                    }
                 }
-            }
-        except:
+            else:
+                # 包不存在
+                log_package_api_response(response.status_code)
+                return {
+                    'type': 'unknown',
+                    'package_name': package_name,
+                    'url': '',
+                    'info': {}
+                }
+            
+        except Exception as e:
+            PackageLogger.log(f"❌ 检查失败: {e}")
             return {
                 'type': 'unknown',
                 'package_name': package_name,
@@ -223,6 +229,12 @@ class PackageFetcher:
             latest_version = data.get('dist-tags', {}).get('latest', '1.0.0')
             version_info = data.get('versions', {}).get(latest_version, {})
             
+            # 获取完整的 README
+            readme = data.get('readme', '')
+            
+            # NPM Registry API 返回完整的 README
+            PackageLogger.log(f"📄 README 长度: {len(readme)} 字符")
+            
             return {
                 'type': 'npm',
                 'package_name': package_name,
@@ -231,7 +243,8 @@ class PackageFetcher:
                     'name': data.get('name', package_name),
                     'version': latest_version,
                     'summary': version_info.get('description', ''),
-                    'description': data.get('readme', ''),
+                    'description': readme,  # ✅ 完整的 README
+                    'readme': readme,  # ✅ 保留原始 README
                     'author': version_info.get('author', {}).get('name', '') if isinstance(version_info.get('author'), dict) else str(version_info.get('author', '')),
                     'license': version_info.get('license', ''),
                     'home_page': version_info.get('homepage', ''),

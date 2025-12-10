@@ -62,15 +62,28 @@ class ProjectDetector:
         if not result.get('name'):
             result['name'] = self.project_path.name
         
-        # 读取 README
+        # 读取完整 README
         readme_path = self.project_path / 'README.md'
         if readme_path.exists():
             try:
                 readme_content = readme_path.read_text(encoding='utf-8')
-                # 提取第一段作为描述
+                
+                # 保存完整 README
+                result['readme'] = readme_content
+                
+                # 智能提取简短描述
                 lines = [l.strip() for l in readme_content.split('\n') if l.strip() and not l.startswith('#')]
                 if lines:
-                    result['description'] = lines[0][:500]
+                    # 找到第一个有实际内容的段落
+                    for line in lines:
+                        if len(line) > 20 and not line.startswith('```'):
+                            result['description'] = line[:500]
+                            break
+                
+                # 提取命令（从 README 中）
+                command = self._extract_command_from_readme(readme_content)
+                if command:
+                    result['command'] = command
             except:
                 pass
         
@@ -137,4 +150,49 @@ class ProjectDetector:
         info['version'] = '1.0.0'
         
         return info
+    
+    def _extract_command_from_readme(self, readme_content: str) -> str:
+        """
+        从 README 中提取安装/运行命令
+        
+        Args:
+            readme_content: README 文件内容
+            
+        Returns:
+            提取到的命令，如果没找到返回空字符串
+        """
+        import re
+        
+        # 查找代码块中的 uvx 或 npx 命令
+        # 匹配 ```bash 或 ```shell 或 ``` 后面的命令
+        code_blocks = re.findall(r'```(?:bash|shell|sh)?\n(.*?)```', readme_content, re.DOTALL)
+        
+        for block in code_blocks:
+            lines = block.strip().split('\n')
+            for line in lines:
+                line = line.strip()
+                
+                # 跳过注释和空行
+                if not line or line.startswith('#'):
+                    continue
+                
+                # 移除行首的 $ 符号
+                if line.startswith('$ '):
+                    line = line[2:]
+                
+                # 查找 uvx 命令
+                if line.startswith('uvx '):
+                    return line
+                
+                # 查找 npx 命令
+                if line.startswith('npx '):
+                    return line
+        
+        # 如果代码块中没找到，尝试在普通文本中查找
+        # 查找行内代码 `uvx ...` 或 `npx ...`
+        inline_commands = re.findall(r'`((?:uvx|npx)\s+[^`]+)`', readme_content)
+        if inline_commands:
+            return inline_commands[0]
+        
+        return ""
 

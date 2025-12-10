@@ -605,68 +605,185 @@ class SignalRChatTester:
             if ai_generator:
                 try:
                     prompt = f"""
-生成一个自然的测试问题，用于测试 MCP 工具。
+生成一个自然、口语化的测试问题，模拟真实用户场景。
 
 MCP名称：{mcp_name}
 工具名称：{tool_name}
 工具描述：{tool_desc}
 
 要求：
-1. 像普通用户一样提问
-2. 首次对话，先打个招呼
-3. 然后询问这个工具的功能
-4. 语言自然友好
-5. 30-50字
+1. **像真实用户一样自然提问**，不要像测试脚本
+2. 首次对话，可以简单打招呼（可选）
+3. 直接提出具体需求，例如：
+   - "帮我查一下北京的 Python 开发职位"
+   - "我想了解一下微软公司的薪资水平"
+   - "能帮我搜索一下最近的招聘信息吗"
+4. 使用口语化表达，贴近日常对话
+5. 包含具体的测试数据（城市名、职位名、公司名等）
+6. 20-40字
 
-直接返回问题，不要其他内容。
+直接返回问题，不要引号或其他修饰。
 """
                     
                     response = ai_generator.client.chat.completions.create(
                         model=ai_generator.deployment_name,
                         messages=[{"role": "user", "content": prompt}],
-                        temperature=0.8,
-                        max_tokens=100
+                        temperature=0.9,  # 提高温度，更自然
+                        max_tokens=150
                     )
                     
-                    return response.choices[0].message.content.strip()
-                except:
-                    pass
+                    question = response.choices[0].message.content.strip().strip('"').strip("'")
+                    self.log(f"   🤖 AI 生成问题: {question}")
+                    return question
+                except Exception as e:
+                    self.log(f"   ⚠️ AI 生成失败: {e}")
             
-            return f"你好！@{mcp_name} 我想了解一下 {tool_name} 这个功能是做什么的？"
+            # 智能降级方案：根据工具描述生成自然问题
+            return self._generate_smart_question(tool_name, tool_desc, is_first=True)
         
         # 后续工具，基于上下文提问
         if ai_generator:
             try:
                 prompt = f"""
-生成一个自然的测试问题，用于测试 MCP 工具。
+生成一个自然、口语化的测试问题，模拟真实用户场景。
 
 MCP名称：{mcp_name}
 工具名称：{tool_name}
 工具描述：{tool_desc}
 
 要求：
-1. 像普通用户一样提问
-2. 这是对话中的后续问题，要自然承接
-3. 例如："好的，那我想试试..."、"明白了，请帮我..."
-4. 语言自然友好
-5. 20-40字
+1. **像真实用户一样自然提问**，这是对话中的后续问题
+2. 使用自然的承接语，例如：
+   - "好的，那帮我查一下..."
+   - "明白了，我想看看..."
+   - "那我再试试..."
+   - 或者直接提问
+3. 包含具体的测试数据（城市名、职位名、公司名等）
+4. 口语化表达，贴近日常对话
+5. 15-35字
 
-直接返回问题，不要其他内容。
+直接返回问题，不要引号或其他修饰。
 """
                 
                 response = ai_generator.client.chat.completions.create(
                     model=ai_generator.deployment_name,
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.8,
-                    max_tokens=100
+                    temperature=0.9,
+                    max_tokens=150
                 )
                 
-                return response.choices[0].message.content.strip()
-            except:
-                pass
+                question = response.choices[0].message.content.strip().strip('"').strip("'")
+                self.log(f"   🤖 AI 生成问题: {question}")
+                return question
+            except Exception as e:
+                self.log(f"   ⚠️ AI 生成失败: {e}")
         
-        # 降级方案
-        return f"@{mcp_name} 请帮我测试一下 {tool_name} 功能"
+        # 智能降级方案
+        return self._generate_smart_question(tool_name, tool_desc, is_first=False)
+    
+    def _generate_smart_question(self, tool_name: str, tool_desc: str, is_first: bool = False) -> str:
+        """
+        智能生成测试问题（无需 AI）
+        根据工具名称和描述，生成贴近真实用户的问题
+        """
+        # 转换为小写便于匹配
+        name_lower = tool_name.lower()
+        desc_lower = tool_desc.lower()
+        
+        # 构建承接语
+        prefix = "" if is_first else ["好的，那", "明白了，", "那我", ""][__import__('random').randint(0, 3)]
+        
+        # 根据工具类型智能生成问题
+        
+        # 1. 搜索/查询类
+        if any(keyword in name_lower or keyword in desc_lower for keyword in ['search', 'find', 'query', '搜索', '查询', '查找']):
+            if 'job' in name_lower or 'job' in desc_lower or '职位' in desc_lower or '招聘' in desc_lower:
+                questions = [
+                    f"{prefix}帮我找一下北京的 Python 开发工程师职位",
+                    f"{prefix}搜索一下上海的数据分析师岗位",
+                    f"{prefix}查一下深圳有没有产品经理的招聘",
+                    f"{prefix}我想看看杭州的前端工程师职位"
+                ]
+            elif 'company' in name_lower or '公司' in desc_lower:
+                questions = [
+                    f"{prefix}查一下腾讯公司的基本信息",
+                    f"{prefix}我想了解一下字节跳动",
+                    f"{prefix}搜索一下阿里巴巴公司"
+                ]
+            else:
+                questions = [
+                    f"{prefix}帮我搜索一下相关信息",
+                    f"{prefix}查一下这方面的内容",
+                    f"{prefix}找找看有什么结果"
+                ]
+        
+        # 2. 获取详情类
+        elif any(keyword in name_lower or keyword in desc_lower for keyword in ['detail', 'get', 'info', '详情', '获取', '信息']):
+            if 'job' in name_lower or '职位' in desc_lower:
+                questions = [
+                    f"{prefix}看一下这个职位的详细信息",
+                    f"{prefix}我想了解这个岗位的具体要求",
+                    f"{prefix}详细介绍一下这个工作"
+                ]
+            elif 'salary' in name_lower or 'pay' in name_lower or '薪资' in desc_lower or '工资' in desc_lower:
+                questions = [
+                    f"{prefix}查一下软件工程师在北京的薪资水平",
+                    f"{prefix}我想知道产品经理的工资大概多少",
+                    f"{prefix}帮我看看数据分析师的薪酬情况"
+                ]
+            else:
+                questions = [
+                    f"{prefix}获取一下详细信息",
+                    f"{prefix}帮我看看具体内容",
+                    f"{prefix}了解一下详情"
+                ]
+        
+        # 3. 分析/统计类
+        elif any(keyword in name_lower or keyword in desc_lower for keyword in ['analy', 'statistic', 'report', '分析', '统计', '报告']):
+            questions = [
+                f"{prefix}分析一下互联网行业的就业趋势",
+                f"{prefix}给我看看技术岗位的数据统计",
+                f"{prefix}帮我做个行业薪资分析"
+            ]
+        
+        # 4. 计算/估算类
+        elif any(keyword in name_lower or keyword in desc_lower for keyword in ['calculat', 'estimat', 'comput', '计算', '估算']):
+            questions = [
+                f"{prefix}算一下税后收入大概多少",
+                f"{prefix}帮我估算一下年薪",
+                f"{prefix}计算一下综合薪酬"
+            ]
+        
+        # 5. 比较类
+        elif any(keyword in name_lower or keyword in desc_lower for keyword in ['compar', 'vs', 'versus', '比较', '对比']):
+            questions = [
+                f"{prefix}比较一下北京和上海的薪资水平",
+                f"{prefix}对比一下不同公司的待遇",
+                f"{prefix}看看哪个城市的机会更多"
+            ]
+        
+        # 6. 推荐类
+        elif any(keyword in name_lower or keyword in desc_lower for keyword in ['recommend', 'suggest', '推荐', '建议']):
+            questions = [
+                f"{prefix}推荐几个适合我的职位",
+                f"{prefix}给我建议一些好的公司",
+                f"{prefix}有什么合适的工作推荐吗"
+            ]
+        
+        # 7. 通用功能
+        else:
+            questions = [
+                f"{prefix}试试 {tool_name} 功能",
+                f"{prefix}帮我用一下 {tool_name}",
+                f"{prefix}测试一下 {tool_name} 看看"
+            ]
+        
+        # 随机选择一个问题
+        import random
+        question = random.choice(questions)
+        
+        self.log(f"   💡 智能生成问题: {question}")
+        return question
     
     def _send_and_receive(
         self,
@@ -747,15 +864,27 @@ MCP名称：{mcp_name}
             
             # ⭐ 如果期望特定工具，必须检查 FunctionName
             if expect_tool:
-                # 检查 FunctionName 中是否包含期望的工具
-                tool_called = any(expect_tool.lower() in fn.lower() for fn in function_calls)
+                # 智能匹配：支持带/不带 API_ 前缀的匹配
+                # 例如：expect_tool = "API_job_search", FunctionName 可能是 "job_search" 或 "API_job_search"
+                expect_tool_clean = expect_tool.lower().replace('api_', '')
+                
+                tool_called = False
+                matched_function = None
+                
+                for fn in function_calls:
+                    fn_clean = fn.lower().replace('api_', '')
+                    # 双向匹配：expect包含fn 或 fn包含expect
+                    if expect_tool_clean in fn_clean or fn_clean in expect_tool_clean:
+                        tool_called = True
+                        matched_function = fn
+                        break
                 
                 if not tool_called:
                     self.log(f"   ❌ 期望工具 {expect_tool} 未被调用")
                     self.log(f"   📋 实际调用: {function_calls}")
                     success = False  # ⭐ 标记为失败
                 else:
-                    self.log(f"   ✅ 确认调用工具: {expect_tool}")
+                    self.log(f"   ✅ 确认调用工具: {expect_tool} (匹配到: {matched_function})")
             
             return {
                 "success": success,
@@ -864,11 +993,22 @@ MCP名称：{mcp_name}
 </html>
 """
         
-        # 保存文件
+        # 保存文件到 outputs/reports 目录
         import os
-        abs_path = os.path.abspath(output_file)
+        from pathlib import Path
         
-        with open(output_file, 'w', encoding='utf-8') as f:
+        # 确保 outputs/reports 目录存在
+        reports_dir = Path("outputs/reports")
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 如果 output_file 没有路径前缀，添加 outputs/reports/
+        output_path = Path(output_file)
+        if not output_path.parent or output_path.parent == Path('.'):
+            output_path = reports_dir / output_file
+        
+        abs_path = output_path.absolute()
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html)
         
         self.log(f"\n💾 对话测试报告已保存")

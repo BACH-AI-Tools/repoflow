@@ -127,22 +127,25 @@ def init(org, repo, path, private, pipeline, skip_scan, setup_secrets, deploy_me
                 sys.exit(0)
     
     try:
-        # 步骤 1: 扫描敏感信息
+        # 步骤 1: 安全提示
+        console.print("\n[bold cyan]步骤 1/4:[/bold cyan] 安全检查...")
+        console.print("ℹ️  使用 GitHub Push Protection 自动阻止敏感信息推送", style="cyan")
+        console.print("   组织管理员请确保已启用: https://github.com/organizations/{}/settings/security_analysis".format(org), style="dim")
+        
+        # 可选：本地快速扫描（不可靠，仅作提示）
         if not skip_scan:
-            console.print("\n[bold cyan]步骤 1/4:[/bold cyan] 扫描敏感信息...")
             scanner = SecretScanner()
             issues = scanner.scan_directory(project_path)
             
             if issues:
-                console.print(f"⚠️  发现 {len(issues)} 个潜在敏感信息:", style="bold yellow")
-                for issue in issues[:10]:  # 只显示前10个
+                console.print(f"\n⚠️  本地扫描发现 {len(issues)} 个潜在敏感信息（仅供参考）:", style="yellow")
+                for issue in issues[:5]:  # 只显示前5个
                     console.print(f"  • {issue['file']}:{issue['line']} - {issue['type']}")
                 
-                if not click.confirm("\n继续发布吗？"):
+                console.print("\n💡 推荐：让 GitHub Push Protection 自动处理（更准确）", style="cyan")
+                if not click.confirm("是否继续发布？（GitHub 会在推送时再次检查）", default=True):
                     console.print("已取消", style="yellow")
                     return
-            else:
-                console.print("✅ 未发现敏感信息", style="green")
         
         # 步骤 2: 创建 GitHub 仓库
         console.print("\n[bold cyan]步骤 2/4:[/bold cyan] 创建 GitHub 仓库...")

@@ -150,7 +150,8 @@ class JimengLogoGenerator:
         package_url: str,
         emcp_base_url: str = "https://sit-emcp.kaleido.guru",
         use_v40: bool = True,
-        fallback_description: str = None
+        fallback_description: str = None,
+        session_token: str = None
     ) -> Dict:
         """
         从包地址生成 Logo 并上传到 EMCP
@@ -159,7 +160,8 @@ class JimengLogoGenerator:
             package_url: 包地址 (PyPI/NPM/Docker)
             emcp_base_url: EMCP 平台地址
             use_v40: 是否使用即梦 4.0 (推荐)
-            fallback_description: 降级描述（当包不存在时使用）
+            fallback_description: MCP 模板描述（优先使用，用于生成更准确的 Logo）
+            session_token: EMCP 会话 token（可选，用于上传认证）
         
         Returns:
             {
@@ -201,14 +203,26 @@ class JimengLogoGenerator:
                         "success": False,
                         "error": f"无法识别包类型且无降级描述: {package_url}"
                     }
-            
-            print(f"✅ 包类型: {package_info['type']}")
-            print(f"✅ 包名: {package_info['package_name']}")
-            
-            info = package_info.get('info', {})
-            description = info.get('summary') or info.get('description') or info.get('name', '')
-            
-            print(f"✅ 描述: {description[:100]}...")
+            else:
+                # ⭐ 即使包存在，也优先使用 MCP 模板描述（更准确）
+                if fallback_description:
+                    print(f"✅ 包类型: {package_info['type']}")
+                    print(f"✅ 包名: {package_info['package_name']}")
+                    print(f"📝 使用 MCP 模板描述替换原始 README")
+                    # 用 MCP 模板描述覆盖原始包信息中的描述
+                    if 'info' not in package_info:
+                        package_info['info'] = {}
+                    package_info['info']['description'] = fallback_description
+                    package_info['info']['summary'] = fallback_description[:200]
+                    print(f"✅ MCP 描述: {fallback_description[:100]}...")
+                else:
+                    print(f"✅ 包类型: {package_info['type']}")
+                    print(f"✅ 包名: {package_info['package_name']}")
+                    
+                    info = package_info.get('info', {})
+                    description = info.get('summary') or info.get('description') or info.get('name', '')
+                    
+                    print(f"✅ 描述: {description[:100]}...")
             
             # 步骤 2: 生成提示词
             print(f"\n🎯 步骤 2/4: 生成 Logo 提示词...")
@@ -243,7 +257,7 @@ class JimengLogoGenerator:
             # 步骤 5: 尝试上传到 EMCP (可选)
             print(f"\n⬆️ 步骤 5/5: 上传到 EMCP (可选)...")
             
-            emcp_logo_url = self._upload_to_emcp(jimeng_image_url, emcp_base_url)
+            emcp_logo_url = self._upload_to_emcp(jimeng_image_url, emcp_base_url, session_token)
             
             if emcp_logo_url:
                 print(f"✅ EMCP URL: {emcp_logo_url}")
@@ -275,59 +289,135 @@ class JimengLogoGenerator:
             }
     
     def _create_logo_prompt(self, package_info: Dict) -> str:
-        """根据包信息创建 Logo 生成提示词"""
+        """根据 MCP 功能创建 Logo 生成提示词"""
         info = package_info.get('info', {})
         
         package_name = package_info['package_name']
-        package_type = package_info['type']
         
-        # 获取描述（优先使用完整 README）
-        readme = info.get('readme', info.get('description', ''))
+        # 优先使用 description（MCP 模板描述）
+        description_text = info.get('description', '')
+        readme = info.get('readme', '')
         summary = info.get('summary', '')
         
-        # 使用更详细的描述（最多500字符）
-        if readme and len(readme) > 100:
-            description = readme[:500]  # ✅ 使用更长的描述
-            print(f"   📖 使用 README 生成提示词 ({len(readme)} 字符)")
+        # 判断使用哪种描述
+        if description_text and len(description_text) > 100:
+            description = description_text[:2000]
+            if readme and description_text == readme:
+                print(f"   📖 使用 README 生成提示词 ({len(description_text)} 字符)")
+            else:
+                print(f"   📝 使用 MCP 模板描述生成提示词 ({len(description_text)} 字符)")
         elif summary:
             description = summary[:300]
             print(f"   📝 使用简介生成提示词")
         else:
-            description = f"{package_name} - {package_type} package"
-            print(f"   ⚠️  使用默认描述")
+            description = ""
+            print(f"   ⚠️  无可用描述")
         
         # 清理描述（移除 Markdown 标记，保留文字）
         import re
         description = re.sub(r'#+\s*', '', description)  # 移除标题标记
         description = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', description)  # 移除链接但保留文字
         description = re.sub(r'```.*?```', '', description, flags=re.DOTALL)  # 移除代码块
+        description = re.sub(r'\*\*([^*]+)\*\*', r'\1', description)  # 移除加粗
         description = description.strip()
         
-        # 根据包类型选择图标元素
-        type_elements = {
-            'pypi': '蟒蛇、代码、Python标志',
-            'npm': 'JavaScript、Node.js、包管理',
-            'docker': '容器、鲸鱼、云平台'
-        }
+        # ⭐ 从描述中提取核心功能关键词
+        core_function = self._extract_core_function(description, package_name)
         
-        elements = type_elements.get(package_type, '代码、工具、软件')
+        # ⭐ 根据功能选择设计元素（而非语言/包类型）
+        design_elements = self._get_design_elements(core_function, description)
         
-        # 构建提示词
-        prompt = f"""{package_name} Logo 设计:
-一个专业的 {package_type.upper()} 包管理工具标志
+        # 构建提示词 - 基于 MCP 实际功能
+        prompt = f"""MCP 服务 Logo 设计
 
-包描述: {description}
+服务名称: {core_function}
+功能描述: {description[:500] if description else core_function}
 
 设计要求:
-- 主题: 蓝色渐变色调
-- 元素: {elements}
-- 风格: 扁平化、现代、简洁、专业
-- 布局: 方形图标，白色或透明背景
-- 文字: 可包含包名 {package_name}
+- 主题: 现代科技风格，蓝色或紫色渐变
+- 核心元素: {design_elements}
+- 风格: 扁平化、简约、专业、高端
+- 布局: 方形图标，简洁背景
 
-要求: 干净清晰的现代科技 logo，适合软件包标识使用"""
+请设计一个能体现"{core_function}"功能的现代化 Logo，要有科技感和专业感"""
         
         return prompt
+    
+    def _extract_core_function(self, description: str, package_name: str) -> str:
+        """从描述中提取核心功能"""
+        import re
+        
+        # 清理包名，提取有意义的部分
+        clean_name = package_name.replace('bach-', '').replace('bachai-', '')
+        clean_name = clean_name.replace('-mcp', '').replace('_mcp', '')
+        clean_name = clean_name.replace('-', ' ').replace('_', ' ')
+        
+        # 尝试从描述中提取功能关键词
+        if description:
+            # 匹配 "用于XXX的" 或 "XXX服务" 模式
+            patterns = [
+                r'用于[「【]?([^」】,，。.]+)[」】]?的',
+                r'提供[「【]?([^」】,，。.]+)[」】]?服务',
+                r'一个[「【]?([^」】,，。.]+)[」】]?的',
+                r'for\s+([a-zA-Z\s]+)',
+            ]
+            for pattern in patterns:
+                match = re.search(pattern, description)
+                if match:
+                    extracted = match.group(1).strip()
+                    if len(extracted) > 2 and len(extracted) < 30:
+                        return extracted
+            
+            # 取描述的第一句话的核心部分
+            first_sentence = description.split('。')[0].split('.')[0]
+            if len(first_sentence) > 5 and len(first_sentence) < 50:
+                return first_sentence[:30]
+        
+        # 降级使用清理后的包名
+        return clean_name if clean_name else "AI 服务"
+    
+    def _get_design_elements(self, core_function: str, description: str) -> str:
+        """根据核心功能获取设计元素"""
+        text = f"{core_function} {description}".lower()
+        
+        # 功能关键词到设计元素的映射
+        element_map = {
+            # 数据类
+            ('数据', 'data', '分析', 'analytics'): '数据图表、统计曲线、智能分析',
+            ('搜索', 'search', '检索', '查询'): '搜索图标、放大镜、数据流',
+            # 电商类
+            ('商品', '电商', 'amazon', 'walmart', '购物', 'shop'): '购物车、商品标签、价格曲线',
+            ('支付', 'pay', 'payment', '金融'): '金融符号、安全盾牌、交易流程',
+            # 社交类
+            ('社交', 'social', '媒体', 'twitter', 'instagram'): '社交网络、连接节点、对话气泡',
+            ('视频', 'video', 'youtube', '影音'): '播放按钮、视频帧、流媒体',
+            # 地图/房产类
+            ('地图', 'map', '位置', 'location'): '地图标记、定位图标、路线',
+            ('房产', 'real', 'estate', 'property', '房屋'): '建筑剪影、房屋图标、城市天际线',
+            # 通讯类
+            ('消息', 'message', 'whatsapp', '通讯', 'chat'): '消息气泡、通讯图标、连接线',
+            ('邮件', 'email', 'mail'): '邮件信封、通知图标',
+            # 文件类
+            ('文件', 'file', 'document', '文档'): '文件图标、文档堆叠、整理',
+            # 翻译类
+            ('翻译', 'translat', '语言', 'language'): '语言符号、翻译箭头、地球',
+            # 天气类
+            ('天气', 'weather', '气象'): '天气图标、云朵、温度计',
+            # 工作/招聘类
+            ('工作', 'job', '招聘', 'career', '职位'): '公文包、职业图标、人才网络',
+            # 新闻类
+            ('新闻', 'news', '资讯'): '报纸、信息流、新闻图标',
+            # AI/智能类
+            ('ai', '智能', 'intelligent', 'smart'): '神经网络、AI芯片、智能大脑',
+        }
+        
+        # 匹配设计元素
+        for keywords, elements in element_map.items():
+            if any(kw in text for kw in keywords):
+                return elements
+        
+        # 默认元素
+        return '科技齿轮、数据节点、智能连接'
     
     def _generate_with_jimeng(self, prompt: str, use_v40: bool = True) -> Optional[str]:
         """使用即梦 MCP 生成图片"""
@@ -428,27 +518,36 @@ class JimengLogoGenerator:
             
             # 清理文件名中的非法字符（/, \, :, *, ?, ", <, >, |, @）
             import re
+            from pathlib import Path
+            
+            # 确保 outputs/logos 目录存在
+            logos_dir = Path("outputs/logos")
+            logos_dir.mkdir(parents=True, exist_ok=True)
+            
             safe_name = re.sub(r'[/\\:*?"<>|@]', '_', package_name)
-            filename = f"logo_{safe_name}.png"
+            filename = logos_dir / f"logo_{safe_name}.png"
             
             with open(filename, 'wb') as f:
                 f.write(image_data)
             
-            print(f"   ✅ 已保存: {len(image_data):,} 字节")
+            print(f"   ✅ 已保存到: {filename.absolute()}")
+            print(f"   📦 文件大小: {len(image_data):,} 字节")
             
-            return filename
+            return str(filename)
             
         except Exception as e:
             print(f"   ❌ 保存失败: {e}")
             return None
     
-    def _upload_to_emcp(self, image_url: str, base_url: str) -> Optional[str]:
+    def _upload_to_emcp(self, image_url: str, base_url: str, session_token: str = None, retry_on_401: bool = True) -> Optional[str]:
         """
-        下载图片并上传到 EMCP
+        下载图片并上传到 EMCP（支持401自动重试）
         
         Args:
             image_url: 即梦图片 URL
             base_url: EMCP 平台地址
+            session_token: EMCP 会话 token（可选，用于认证）
+            retry_on_401: 遇到401时是否自动登录重试
         
         Returns:
             EMCP logo URL (如 /api/proxyStorage/NoAuth/xxx.png)
@@ -470,13 +569,66 @@ class JimengLogoGenerator:
                 'file': ('logo.png', image_data, 'image/png')
             }
             
+            # 添加 token header (如果提供了)
+            headers = {}
+            if session_token:
+                headers['token'] = session_token
+            
             print(f"   📤 上传文件流到 EMCP...")
             print(f"      URL: {upload_url}")
             print(f"      文件名: logo.png")
             print(f"      大小: {len(image_data):,} 字节")
+            if session_token:
+                print(f"      认证: 使用 session token")
             
             # 发送 multipart/form-data 请求
-            response = requests.post(upload_url, files=files, timeout=30)
+            response = requests.post(upload_url, files=files, headers=headers, timeout=30)
+            
+            # 检查 401 错误
+            if response.status_code == 401 and retry_on_401:
+                print(f"   ⚠️ 收到 401 Unauthorized - Token 可能已过期或未登录")
+                print(f"   🔄 尝试登录 EMCP 并重试...")
+                
+                try:
+                    from src.unified_config_manager import UnifiedConfigManager
+                    config_mgr = UnifiedConfigManager()
+                    emcp_config = config_mgr.get_emcp_config()
+                    
+                    if not emcp_config.get("phone_number"):
+                        print(f"   ❌ 未配置 EMCP 账号，无法自动登录")
+                        return None
+                    
+                    # 登录获取新 token
+                    login_url = f"{base_url}/api/Login/login"
+                    login_data = {
+                        "phone_number": emcp_config['phone_number'],
+                        "validation_code": emcp_config['validation_code']
+                    }
+                    
+                    print(f"   📱 登录: {emcp_config['phone_number']}")
+                    login_resp = requests.post(login_url, json=login_data, timeout=30)
+                    login_resp.raise_for_status()
+                    login_result = login_resp.json()
+                    
+                    if login_result.get('err_code') == 0:
+                        new_token = login_result['body']['session_key']
+                        print(f"   ✅ 登录成功，获得新 token")
+                        
+                        # 使用新 token 重试上传
+                        return self._upload_to_emcp(
+                            image_url=image_url,
+                            base_url=base_url,
+                            session_token=new_token,
+                            retry_on_401=False  # 避免无限重试
+                        )
+                    else:
+                        print(f"   ❌ 登录失败: {login_result.get('err_message')}")
+                        return None
+                        
+                except Exception as e:
+                    print(f"   ❌ 自动登录失败: {e}")
+                    return None
+            
             response.raise_for_status()
             
             data = response.json()
@@ -499,13 +651,24 @@ class JimengLogoGenerator:
 def main():
     """主函数 - 命令行使用示例"""
     import sys
+    from src.unified_config_manager import UnifiedConfigManager
     
-    # 即梦 MCP 配置
+    # 从配置文件读取即梦 MCP 配置
+    config_mgr = UnifiedConfigManager()
+    jimeng_cfg = config_mgr.get_jimeng_config()
+    
+    if not jimeng_cfg.get("emcp_key") or not jimeng_cfg.get("emcp_usercode"):
+        print("❌ 错误：请先在配置文件中设置 jimeng.emcp_key 和 jimeng.emcp_usercode")
+        print("   配置文件位置：config.json")
+        print("   参考模板：config_template.json")
+        sys.exit(1)
+    
+    # 构建即梦 MCP 配置
     jimeng_config = {
-        "base_url": "http://mcptest013.sitmcp.kaleido.guru/sse",
+        "base_url": jimeng_cfg.get("mcp_url", "http://mcptest013.sitmcp.kaleido.guru/sse"),
         "headers": {
-            "emcp-key": "PI1EQcsELJ7uPJnL3VNS89UaNIgRkL8n",
-            "emcp-usercode": "VGSdDTgj"
+            "emcp-key": jimeng_cfg.get("emcp_key"),
+            "emcp-usercode": jimeng_cfg.get("emcp_usercode")
         }
     }
     

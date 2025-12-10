@@ -31,7 +31,8 @@ class LogoGenerator:
     def __init__(
         self,
         azure_openai_client: Optional[AzureOpenAI] = None,
-        jimeng_mcp_client = None,
+        jimeng_mcp_client = None,  # 已废弃，保留兼容
+        jimeng_api_generator = None,  # 新：即梦 API 生成器
         emcp_base_url: str = "https://sit-emcp.kaleido.guru",
         emcp_manager = None
     ):
@@ -40,12 +41,14 @@ class LogoGenerator:
         
         Args:
             azure_openai_client: Azure OpenAI 客户端（可选，用于 DALL-E 生成）
-            jimeng_mcp_client: 即梦MCP客户端（可选，用于生成图片）
+            jimeng_mcp_client: [已废弃] 即梦MCP客户端
+            jimeng_api_generator: 即梦 API 生成器（推荐）
             emcp_base_url: EMCP 平台地址
             emcp_manager: EMCP管理器实例（用于获取登录token）
         """
         self.openai_client = azure_openai_client
-        self.jimeng_client = jimeng_mcp_client
+        self.jimeng_client = jimeng_mcp_client  # 兼容旧代码
+        self.jimeng_api = jimeng_api_generator  # 新：即梦 API
         self.emcp_base_url = emcp_base_url
         self.emcp_manager = emcp_manager
         self.default_logo = "/api/proxyStorage/NoAuth/default-mcp-logo.png"
@@ -80,23 +83,34 @@ class LogoGenerator:
             if emcp_logo != self.default_logo:
                 return emcp_logo
         
-        # 2. 优先使用即梦MCP生成 ✅ 已启用
+        # 2. 优先使用即梦 API 生成（推荐）
         if use_jimeng:
-            if not self.jimeng_client:
-                LogoLogger.log(f"   ⚠️ 即梦MCP客户端未初始化（可能在设置中被禁用）")
-            else:
+            # 优先使用即梦 API
+            if self.jimeng_api:
                 try:
-                    LogoLogger.log(f"   🎨 使用即梦MCP生成Logo...")
-                    jimeng_logo = self._generate_logo_with_jimeng(package_info)
+                    LogoLogger.log(f"   🎨 使用即梦 API 生成 Logo...")
+                    jimeng_logo = self._generate_logo_with_jimeng_api(package_info)
                     if jimeng_logo:
-                        LogoLogger.log(f"   ✅ 即梦MCP生成成功")
-                        return jimeng_logo  # 已经是EMCP URL
+                        LogoLogger.log(f"   ✅ 即梦 API 生成成功")
+                        return jimeng_logo
                     else:
-                        LogoLogger.log(f"   ⚠️ 即梦MCP返回空结果")
+                        LogoLogger.log(f"   ⚠️ 即梦 API 返回空结果")
                 except Exception as e:
-                    LogoLogger.log(f"   ❌ 即梦MCP生成失败: {e}")
+                    LogoLogger.log(f"   ❌ 即梦 API 生成失败: {e}")
                     import traceback
                     LogoLogger.log(f"   详细错误: {traceback.format_exc()}")
+            # 降级使用即梦 MCP（兼容旧代码）
+            elif self.jimeng_client:
+                try:
+                    LogoLogger.log(f"   🎨 使用即梦 MCP 生成 Logo...")
+                    jimeng_logo = self._generate_logo_with_jimeng(package_info)
+                    if jimeng_logo:
+                        LogoLogger.log(f"   ✅ 即梦 MCP 生成成功")
+                        return jimeng_logo
+                except Exception as e:
+                    LogoLogger.log(f"   ❌ 即梦 MCP 生成失败: {e}")
+            else:
+                LogoLogger.log(f"   ⚠️ 即梦未配置（请在设置中配置 API 密钥）")
         
         # 3. 如果配置了 DALL-E
         if generate_with_ai and self.openai_client:
@@ -112,9 +126,62 @@ class LogoGenerator:
         LogoLogger.log(f"   ℹ️ 使用默认Logo")
         return self.default_logo
     
+    def _generate_logo_with_jimeng_api(self, package_info: dict) -> Optional[str]:
+        """
+        使用即梦 API 生成 Logo 并上传到 EMCP
+        
+        Args:
+            package_info: 包信息
+        
+        Returns:
+            EMCP Logo URL 或 None
+        """
+        try:
+            info = package_info.get('info', {})
+            package_name = package_info.get('package_name', '')
+            
+            # 获取描述
+            readme = info.get('readme', info.get('description', ''))
+            summary = info.get('summary', '')
+            description = readme[:500] if readme and len(readme) > 100 else (summary or f"{package_name} package")
+            
+            LogoLogger.log(f"   📋 使用描述: {description[:80]}...")
+            
+            # 使用即梦 API 生成 Logo
+            result = self.jimeng_api.generate_logo_for_mcp(
+                description=description,
+                mcp_name=package_name
+            )
+            
+            if result and result.get('success'):
+                image_url = result.get('image_url')
+                LogoLogger.log(f"   ✅ 即梦 API 生成成功!")
+                LogoLogger.log(f"   📥 图片 URL: {image_url[:60]}...")
+                
+                # 上传到 EMCP
+                LogoLogger.log(f"   ⬆️ 上传到 EMCP...")
+                emcp_logo_url = self._upload_logo_to_emcp(image_url=image_url)
+                
+                if emcp_logo_url and emcp_logo_url != self.default_logo:
+                    LogoLogger.log(f"   ✅ Logo 已上传 EMCP: {emcp_logo_url}")
+                    return emcp_logo_url
+                else:
+                    LogoLogger.log(f"   ❌ EMCP 上传失败，使用默认 Logo")
+                    return self.default_logo
+            else:
+                error = result.get('error', '未知错误') if result else '无结果'
+                LogoLogger.log(f"   ❌ 即梦 API 生成失败: {error}")
+                return None
+                
+        except Exception as e:
+            import traceback
+            LogoLogger.log(f"   ❌ 即梦 API 生成异常: {e}")
+            LogoLogger.log(f"   详情: {traceback.format_exc()[:200]}")
+            return None
+    
     def _generate_logo_with_jimeng(self, package_info: dict) -> Optional[str]:
         """
-        使用即梦MCP生成Logo并上传到EMCP
+        [已废弃] 使用即梦 MCP 生成 Logo 并上传到 EMCP
         
         Args:
             package_info: 包信息
@@ -143,29 +210,24 @@ class LogoGenerator:
             LogoLogger.log(f"   📋 使用描述: {description[:100]}...")
             LogoLogger.log(f"   📄 描述来源: {'README' if readme else 'summary'}")
             
-            # 根据包类型选择设计元素
-            type_elements = {
-                'pypi': '蟒蛇、代码、Python标志',
-                'npm': 'JavaScript、Node.js、包管理',
-                'docker': '容器、鲸鱼、云平台'
-            }
+            # ⭐ 从描述中提取核心功能
+            core_function = self._extract_core_function(description, package_name)
+            design_elements = self._get_design_elements(core_function, description)
             
-            elements = type_elements.get(package_type, '代码、工具、软件')
-            
-            # 构建中文提示词 (即梦MCP更擅长中文)
-            prompt = f"""{package_name} Logo 设计:
-一个专业的 {package_type.upper()} 包管理工具标志
+            # 构建中文提示词 - 基于 MCP 实际功能
+            prompt = f"""MCP 服务 Logo 设计
 
-包描述: {description}
+服务名称: {core_function}
+功能描述: {description[:500] if description else core_function}
 
 设计要求:
-- 主题: 蓝色渐变色调
-- 元素: {elements}
-- 风格: 扁平化、现代、简洁、专业
-- 布局: 方形图标，白色或透明背景
-- 文字: 可包含包名 {package_name}
+- 主题: 现代科技风格，蓝色或紫色渐变
+- 核心元素: {design_elements}
+- 风格: 扁平化、简约、专业、高端
+- 布局: 方形图标，简洁背景
+- 整体感觉: 智能、可靠、专业的 AI 服务
 
-要求: 干净清晰的现代科技 logo，适合软件包标识使用"""
+请设计一个能体现"{core_function}"功能的现代化 Logo"""
             
             LogoLogger.log(f"   📝 提示词: {prompt[:80]}...")
             
@@ -206,6 +268,64 @@ class LogoGenerator:
             LogoLogger.log(f"   ❌ 即梦MCP生成Logo异常: {e}")
             LogoLogger.log(f"   详情: {traceback.format_exc()[:200]}")
             return None
+    
+    def _extract_core_function(self, description: str, package_name: str) -> str:
+        """从描述中提取核心功能"""
+        import re
+        
+        # 清理包名，提取有意义的部分
+        clean_name = package_name.replace('bach-', '').replace('bachai-', '')
+        clean_name = clean_name.replace('-mcp', '').replace('_mcp', '')
+        clean_name = clean_name.replace('-', ' ').replace('_', ' ')
+        
+        # 尝试从描述中提取功能关键词
+        if description:
+            patterns = [
+                r'用于[「【]?([^」】,，。.]+)[」】]?的',
+                r'提供[「【]?([^」】,，。.]+)[」】]?服务',
+                r'一个[「【]?([^」】,，。.]+)[」】]?的',
+                r'for\s+([a-zA-Z\s]+)',
+            ]
+            for pattern in patterns:
+                match = re.search(pattern, description)
+                if match:
+                    extracted = match.group(1).strip()
+                    if len(extracted) > 2 and len(extracted) < 30:
+                        return extracted
+            
+            first_sentence = description.split('。')[0].split('.')[0]
+            if len(first_sentence) > 5 and len(first_sentence) < 50:
+                return first_sentence[:30]
+        
+        return clean_name if clean_name else "AI 服务"
+    
+    def _get_design_elements(self, core_function: str, description: str) -> str:
+        """根据核心功能获取设计元素"""
+        text = f"{core_function} {description}".lower()
+        
+        element_map = {
+            ('数据', 'data', '分析', 'analytics'): '数据图表、统计曲线、智能分析',
+            ('搜索', 'search', '检索', '查询'): '搜索图标、放大镜、数据流',
+            ('商品', '电商', 'amazon', 'walmart', '购物'): '购物车、商品标签、价格曲线',
+            ('支付', 'pay', 'payment', '金融'): '金融符号、安全盾牌、交易流程',
+            ('社交', 'social', '媒体', 'twitter', 'instagram'): '社交网络、连接节点、对话气泡',
+            ('视频', 'video', 'youtube', '影音'): '播放按钮、视频帧、流媒体',
+            ('地图', 'map', '位置', 'location'): '地图标记、定位图标、路线',
+            ('房产', 'real', 'estate', 'property'): '建筑剪影、房屋图标、城市天际线',
+            ('消息', 'message', 'whatsapp', '通讯'): '消息气泡、通讯图标、连接线',
+            ('文件', 'file', 'document', '文档'): '文件图标、文档堆叠、整理',
+            ('翻译', 'translat', '语言'): '语言符号、翻译箭头、地球',
+            ('天气', 'weather', '气象'): '天气图标、云朵、温度计',
+            ('工作', 'job', '招聘', 'career'): '公文包、职业图标、人才网络',
+            ('新闻', 'news', '资讯'): '报纸、信息流、新闻图标',
+            ('ai', '智能', 'intelligent'): '神经网络、AI芯片、智能大脑',
+        }
+        
+        for keywords, elements in element_map.items():
+            if any(kw in text for kw in keywords):
+                return elements
+        
+        return '科技齿轮、数据节点、智能连接'
     
     def _get_existing_logo(self, package_info: dict, package_type: str) -> Optional[str]:
         """

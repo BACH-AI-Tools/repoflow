@@ -5,6 +5,7 @@
 """
 
 import tkinter as tk
+import sys
 from tkinter import ttk, filedialog, messagebox
 from src.unified_config_manager import UnifiedConfigManager
 from datetime import datetime
@@ -20,12 +21,18 @@ class SettingsWindow:
         # 创建窗口
         self.window = tk.Toplevel(parent)
         self.window.title("⚙️ 设置")
-        self.window.geometry("700x800")
+        self.window.geometry("750x820")
         self.window.resizable(False, False)
+        
+        # Apple 风格背景
+        self.window.configure(bg='#F5F5F7')
         
         # 使窗口置顶
         self.window.transient(parent)
         self.window.grab_set()
+        
+        # 设置样式
+        self.setup_styles()
         
         # 创建UI
         self.create_widgets()
@@ -45,16 +52,45 @@ class SettingsWindow:
         y = (self.window.winfo_screenheight() // 2) - (height // 2)
         self.window.geometry(f'{width}x{height}+{x}+{y}')
     
+    def setup_styles(self):
+        """设置Apple风格样式"""
+        style = ttk.Style()
+        style.theme_use('aqua' if sys.platform == 'darwin' else 'clam')
+        
+        # Apple风格配色
+        style.configure('TFrame', background='#F5F5F7')
+        style.configure('TLabel', background='#FFFFFF', foreground='#1D1D1F',
+                       font=('SF Pro Text', 11) if sys.platform == 'darwin' else ('微软雅黑', 11))
+        style.configure('TLabelframe', background='#FFFFFF', borderwidth=1, relief='solid')
+        style.configure('TLabelframe.Label', background='#FFFFFF', foreground='#1D1D1F',
+                       font=('SF Pro Display', 13, 'bold') if sys.platform == 'darwin' else ('微软雅黑', 13, 'bold'))
+        
+        # 输入框样式
+        style.configure('TEntry', fieldbackground='#F5F5F7', foreground='#1D1D1F',
+                       insertcolor='#007AFF', borderwidth=1, relief='solid')
+        style.configure('TCombobox', fieldbackground='#F5F5F7', foreground='#1D1D1F',
+                       borderwidth=1)
+        
+        # 按钮样式
+        style.configure('TButton', background='#007AFF', foreground='#FFFFFF',
+                       font=('SF Pro Text', 11, 'bold') if sys.platform == 'darwin' else ('微软雅黑', 11, 'bold'),
+                       borderwidth=0, relief='flat', padding=(16, 8))
+        style.map('TButton', background=[('active', '#0051D5'), ('pressed', '#0051D5')])
+        
+        # Checkbutton 样式
+        style.configure('TCheckbutton', background='#FFFFFF', foreground='#1D1D1F',
+                       font=('SF Pro Text', 10) if sys.platform == 'darwin' else ('微软雅黑', 10))
+    
     def create_widgets(self):
-        """创建界面组件"""
-        # 主容器
-        main_frame = ttk.Frame(self.window, padding=15)
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        """创建界面组件 - Apple风格"""
+        # 主容器 - Apple风格
+        main_frame = tk.Frame(self.window, bg='#F5F5F7')
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
         # 创建带滚动条的 Canvas
-        canvas = tk.Canvas(main_frame, highlightthickness=0)
+        canvas = tk.Canvas(main_frame, highlightthickness=0, bg='#F5F5F7')
         scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
+        scrollable_frame = tk.Frame(canvas, bg='#F5F5F7')
         
         scrollable_frame.bind(
             "<Configure>",
@@ -64,22 +100,34 @@ class SettingsWindow:
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
         
-        # ===== 1. GitHub 配置 =====
-        github_frame = ttk.LabelFrame(scrollable_frame, text="🔗 GitHub 配置", padding=10)
-        github_frame.pack(fill=tk.X, pady=(0, 10))
+        # ===== 1. GitHub 配置 ===== Apple风格
+        github_frame = tk.LabelFrame(scrollable_frame, text="  🔗 GitHub 配置  ", 
+                                     bg='#FFFFFF', fg='#1D1D1F',
+                                     font=('SF Pro Display', 13, 'bold') if sys.platform == 'darwin' else ('微软雅黑', 13, 'bold'),
+                                     bd=1, relief='solid', padx=20, pady=15)
+        github_frame.pack(fill=tk.X, pady=(0, 15))
         
-        ttk.Label(github_frame, text="GitHub Token:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        tk.Label(github_frame, text="GitHub Token:", bg='#FFFFFF', fg='#1D1D1F',
+                font=('SF Pro Text', 11) if sys.platform == 'darwin' else ('微软雅黑', 11)).grid(row=0, column=0, sticky=tk.W, pady=8)
         self.github_token_var = tk.StringVar()
-        token_entry = ttk.Entry(github_frame, textvariable=self.github_token_var, width=50, show="*")
-        token_entry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
+        token_entry = tk.Entry(github_frame, textvariable=self.github_token_var, width=40, show="*",
+                             bg='#F5F5F7', fg='#1D1D1F', insertbackground='#007AFF',
+                             bd=1, relief='solid', font=('SF Pro Text', 11) if sys.platform == 'darwin' else ('微软雅黑', 11))
+        token_entry.grid(row=0, column=1, sticky=tk.EW, padx=8, pady=8, ipady=6, ipadx=8)
         
-        ttk.Button(github_frame, text="🔗 获取 Token", 
-                   command=self.open_github_token_url).grid(row=0, column=2, padx=5)
+        token_btn = tk.Button(github_frame, text="🔗 获取 Token",
+                             bg='#007AFF', fg='#FFFFFF', bd=0, cursor='hand2',
+                             font=('SF Pro Text', 10, 'bold') if sys.platform == 'darwin' else ('微软雅黑', 10, 'bold'),
+                             padx=14, pady=8, command=self.open_github_token_url)
+        token_btn.grid(row=0, column=2, padx=8)
         
-        ttk.Label(github_frame, text="组织名称:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        tk.Label(github_frame, text="组织名称:", bg='#FFFFFF', fg='#1D1D1F',
+                font=('SF Pro Text', 11) if sys.platform == 'darwin' else ('微软雅黑', 11)).grid(row=1, column=0, sticky=tk.W, pady=8)
         self.github_org_var = tk.StringVar()
-        ttk.Entry(github_frame, textvariable=self.github_org_var, width=50).grid(
-            row=1, column=1, sticky=tk.EW, padx=5, pady=5)
+        org_entry = tk.Entry(github_frame, textvariable=self.github_org_var, width=40,
+                            bg='#F5F5F7', fg='#1D1D1F', insertbackground='#007AFF',
+                            bd=1, relief='solid', font=('SF Pro Text', 11) if sys.platform == 'darwin' else ('微软雅黑', 11))
+        org_entry.grid(row=1, column=1, columnspan=2, sticky=tk.EW, padx=8, pady=8, ipady=6, ipadx=8)
         
         github_frame.columnconfigure(1, weight=1)
         
@@ -197,50 +245,141 @@ class SettingsWindow:
         
         pypi_frame.columnconfigure(1, weight=1)
         
-        # ===== 6. 高级选项 =====
-        advanced_frame = ttk.LabelFrame(scrollable_frame, text="⚙️ 高级选项", padding=10)
-        advanced_frame.pack(fill=tk.X, pady=(0, 10))
+        # ===== 6. 即梦 API 配置 ===== 使用火山引擎 API
+        jimeng_frame = tk.LabelFrame(scrollable_frame, text="  🎨 即梦 AI 配置 (Logo 生成)  ",
+                                     bg='#FFFFFF', fg='#1D1D1F',
+                                     font=('SF Pro Display', 13, 'bold') if sys.platform == 'darwin' else ('微软雅黑', 13, 'bold'),
+                                     bd=1, relief='solid', padx=20, pady=15)
+        jimeng_frame.pack(fill=tk.X, pady=(0, 15))
         
         self.jimeng_enabled_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(advanced_frame, text="启用即梦 AI Logo 生成", 
-                       variable=self.jimeng_enabled_var).pack(anchor=tk.W, pady=2)
+        enable_check = tk.Checkbutton(jimeng_frame, text="启用即梦 AI Logo 生成（使用即梦 4.0）",
+                                     variable=self.jimeng_enabled_var,
+                                     bg='#FFFFFF', fg='#1D1D1F',
+                                     font=('SF Pro Text', 11) if sys.platform == 'darwin' else ('微软雅黑', 11),
+                                     selectcolor='#FFFFFF', activebackground='#FFFFFF')
+        enable_check.grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 12))
+        
+        # Access Key
+        tk.Label(jimeng_frame, text="Access Key:", bg='#FFFFFF', fg='#1D1D1F',
+                font=('SF Pro Text', 11) if sys.platform == 'darwin' else ('微软雅黑', 11)).grid(row=1, column=0, sticky=tk.W, pady=8)
+        
+        self.jimeng_ak_var = tk.StringVar()
+        ak_entry = tk.Entry(jimeng_frame, textvariable=self.jimeng_ak_var,
+                           font=('SF Mono', 10) if sys.platform == 'darwin' else ('Consolas', 10),
+                           bg='#F5F5F7', fg='#1D1D1F', insertbackground='#007AFF',
+                           bd=1, relief='solid')
+        ak_entry.grid(row=1, column=1, sticky=tk.EW, padx=8, pady=8, ipady=6)
+        
+        # Secret Key
+        tk.Label(jimeng_frame, text="Secret Key:", bg='#FFFFFF', fg='#1D1D1F',
+                font=('SF Pro Text', 11) if sys.platform == 'darwin' else ('微软雅黑', 11)).grid(row=2, column=0, sticky=tk.W, pady=8)
+        
+        self.jimeng_sk_var = tk.StringVar()
+        sk_entry = tk.Entry(jimeng_frame, textvariable=self.jimeng_sk_var, show="*",
+                           font=('SF Mono', 10) if sys.platform == 'darwin' else ('Consolas', 10),
+                           bg='#F5F5F7', fg='#1D1D1F', insertbackground='#007AFF',
+                           bd=1, relief='solid')
+        sk_entry.grid(row=2, column=1, sticky=tk.EW, padx=8, pady=8, ipady=6)
+        
+        # 提示文字
+        hint_label = tk.Label(
+            jimeng_frame,
+            text='💡 在火山引擎控制台获取密钥: https://console.volcengine.com/iam/keymanage/',
+            bg='#FFFFFF',
+            fg='#86868B',
+            font=('SF Pro Text', 9) if sys.platform == 'darwin' else ('微软雅黑', 9),
+            cursor="hand2"
+        )
+        hint_label.grid(row=3, column=1, sticky=tk.W, padx=8, pady=(0, 8))
+        
+        jimeng_frame.columnconfigure(1, weight=1)
+        
+        # ===== 7. 高级选项 ===== Apple风格
+        advanced_frame = tk.LabelFrame(scrollable_frame, text="  ⚙️ 高级选项  ",
+                                      bg='#FFFFFF', fg='#1D1D1F',
+                                      font=('SF Pro Display', 13, 'bold') if sys.platform == 'darwin' else ('微软雅黑', 13, 'bold'),
+                                      bd=1, relief='solid', padx=20, pady=15)
+        advanced_frame.pack(fill=tk.X, pady=(0, 15))
         
         self.edgeone_enabled_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(advanced_frame, text="启用 EdgeOne Pages 报告分享", 
-                       variable=self.edgeone_enabled_var).pack(anchor=tk.W, pady=2)
+        edge_check = tk.Checkbutton(advanced_frame, text="启用 EdgeOne Pages 报告分享",
+                                   variable=self.edgeone_enabled_var,
+                                   bg='#FFFFFF', fg='#1D1D1F',
+                                   font=('SF Pro Text', 11) if sys.platform == 'darwin' else ('微软雅黑', 11),
+                                   selectcolor='#FFFFFF', activebackground='#FFFFFF')
+        edge_check.pack(anchor=tk.W, pady=3)
         
         self.auto_publish_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(advanced_frame, text="默认自动发布到包管理平台", 
-                       variable=self.auto_publish_var).pack(anchor=tk.W, pady=2)
+        publish_check = tk.Checkbutton(advanced_frame, text="默认自动发布到包管理平台",
+                                      variable=self.auto_publish_var,
+                                      bg='#FFFFFF', fg='#1D1D1F',
+                                      font=('SF Pro Text', 11) if sys.platform == 'darwin' else ('微软雅黑', 11),
+                                      selectcolor='#FFFFFF', activebackground='#FFFFFF')
+        publish_check.pack(anchor=tk.W, pady=3)
         
         self.private_repo_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(advanced_frame, text="默认创建私有仓库", 
-                       variable=self.private_repo_var).pack(anchor=tk.W, pady=2)
+        private_check = tk.Checkbutton(advanced_frame, text="默认创建私有仓库",
+                                      variable=self.private_repo_var,
+                                      bg='#FFFFFF', fg='#1D1D1F',
+                                      font=('SF Pro Text', 11) if sys.platform == 'darwin' else ('微软雅黑', 11),
+                                      selectcolor='#FFFFFF', activebackground='#FFFFFF')
+        private_check.pack(anchor=tk.W, pady=3)
         
         # ===== 按钮区域 =====
-        button_frame = ttk.Frame(scrollable_frame)
-        button_frame.pack(fill=tk.X, pady=10)
+        button_frame = tk.Frame(scrollable_frame, bg='#F5F5F7')
+        button_frame.pack(fill=tk.X, pady=20)
         
-        # 左侧按钮
-        left_buttons = ttk.Frame(button_frame)
+        # 左侧按钮 - Apple风格次要按钮
+        left_buttons = tk.Frame(button_frame, bg='#F5F5F7')
         left_buttons.pack(side=tk.LEFT)
         
-        ttk.Button(left_buttons, text="📥 导入配置", 
-                   command=self.import_config, width=15).pack(side=tk.LEFT, padx=2)
-        ttk.Button(left_buttons, text="📤 导出配置", 
-                   command=self.export_config, width=15).pack(side=tk.LEFT, padx=2)
-        ttk.Button(left_buttons, text="📁 打开配置文件夹", 
-                   command=self.open_config_folder, width=18).pack(side=tk.LEFT, padx=2)
+        # 导入按钮
+        import_btn = tk.Button(left_buttons, text="📥 导入配置",
+                              bg='#FFFFFF', fg='#007AFF', bd=1, relief='solid', cursor='hand2',
+                              font=('SF Pro Text', 10) if sys.platform == 'darwin' else ('微软雅黑', 10),
+                              padx=14, pady=8, command=self.import_config)
+        import_btn.pack(side=tk.LEFT, padx=4)
         
-        # 右侧按钮
-        right_buttons = ttk.Frame(button_frame)
+        # 导出按钮
+        export_btn = tk.Button(left_buttons, text="📤 导出配置",
+                              bg='#FFFFFF', fg='#007AFF', bd=1, relief='solid', cursor='hand2',
+                              font=('SF Pro Text', 10) if sys.platform == 'darwin' else ('微软雅黑', 10),
+                              padx=14, pady=8, command=self.export_config)
+        export_btn.pack(side=tk.LEFT, padx=4)
+        
+        # 打开文件夹按钮
+        folder_btn = tk.Button(left_buttons, text="📁 打开配置文件夹",
+                              bg='#FFFFFF', fg='#007AFF', bd=1, relief='solid', cursor='hand2',
+                              font=('SF Pro Text', 10) if sys.platform == 'darwin' else ('微软雅黑', 10),
+                              padx=14, pady=8, command=self.open_config_folder)
+        folder_btn.pack(side=tk.LEFT, padx=4)
+        
+        # 右侧按钮 - Apple风格主要/次要按钮
+        right_buttons = tk.Frame(button_frame, bg='#F5F5F7')
         right_buttons.pack(side=tk.RIGHT)
         
-        ttk.Button(right_buttons, text="💾 保存", 
-                   command=self.save_config, width=12,
-                   style='Accent.TButton').pack(side=tk.LEFT, padx=2)
-        ttk.Button(right_buttons, text="❌ 取消", 
-                   command=self.window.destroy, width=12).pack(side=tk.LEFT, padx=2)
+        # 取消按钮 - 次要按钮
+        cancel_btn = tk.Button(right_buttons, text="❌ 取消",
+                              bg='#FFFFFF', fg='#6E6E73', bd=1, relief='solid', cursor='hand2',
+                              font=('SF Pro Text', 11) if sys.platform == 'darwin' else ('微软雅黑', 11),
+                              padx=20, pady=10, command=self.window.destroy)
+        cancel_btn.pack(side=tk.LEFT, padx=4)
+        
+        # 保存按钮 - 主要按钮
+        save_btn = tk.Button(right_buttons, text="💾 保存",
+                            bg='#007AFF', fg='#FFFFFF', bd=0, cursor='hand2',
+                            font=('SF Pro Text', 12, 'bold') if sys.platform == 'darwin' else ('微软雅黑', 12, 'bold'),
+                            padx=28, pady=11, command=self.save_config, relief='flat')
+        save_btn.pack(side=tk.LEFT, padx=4)
+        
+        # 添加悬停效果
+        def on_save_enter(e):
+            save_btn.configure(bg='#0051D5')
+        def on_save_leave(e):
+            save_btn.configure(bg='#007AFF')
+        save_btn.bind("<Enter>", on_save_enter)
+        save_btn.bind("<Leave>", on_save_leave)
         
         # 打包滚动区域
         canvas.pack(side="left", fill="both", expand=True)
@@ -299,8 +438,12 @@ class SettingsWindow:
         # PyPI
         self.pypi_mirror_var.set(config.get("pypi", {}).get("mirror_url", "https://pypi.tuna.tsinghua.edu.cn/simple"))
         
-        # 高级选项
-        self.jimeng_enabled_var.set(config.get("jimeng", {}).get("enabled", True))
+        # 即梦 API 配置
+        jimeng_config = config.get("jimeng", {})
+        self.jimeng_enabled_var.set(jimeng_config.get("enabled", True))
+        self.jimeng_ak_var.set(jimeng_config.get("access_key", ""))
+        self.jimeng_sk_var.set(jimeng_config.get("secret_key", ""))
+        
         self.edgeone_enabled_var.set(config.get("edgeone", {}).get("enabled", True))
         self.auto_publish_var.set(config.get("other", {}).get("auto_publish", True))
         self.private_repo_var.set(config.get("other", {}).get("private_repo", False))
@@ -345,10 +488,12 @@ class SettingsWindow:
             config["pypi"] = {}
         config["pypi"]["mirror_url"] = self.pypi_mirror_var.get().strip()
         
-        # 高级选项
+        # 即梦 API 配置
         if "jimeng" not in config:
             config["jimeng"] = {}
         config["jimeng"]["enabled"] = self.jimeng_enabled_var.get()
+        config["jimeng"]["access_key"] = self.jimeng_ak_var.get().strip()
+        config["jimeng"]["secret_key"] = self.jimeng_sk_var.get().strip()
         
         if "edgeone" not in config:
             config["edgeone"] = {}

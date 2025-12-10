@@ -11,7 +11,8 @@
     "base_url": "https://sit-emcp.kaleido.guru",
     "phone_number": "17610785055",
     "validation_code": "",
-    "_note": "验证码会自动生成，无需手动填写"
+    "fallback_token": "d303fc3a-ff8c-422f-afb8-6fc02d685ee2",
+    "_note": "验证码会自动生成，无需手动填写。fallback_token 是备用登录 token，遇到 502 时使用"
   },
   
   "agent": {
@@ -30,7 +31,10 @@
   
   "jimeng": {
     "enabled": true,
-    "mcp_url": "sse+https://jm-mcp.kaleido.guru/sse"
+    "mcp_url": "http://mcptest013.sitmcp.kaleido.guru/sse",
+    "emcp_key": "YOUR_EMCP_KEY_HERE",
+    "emcp_usercode": "YOUR_EMCP_USERCODE_HERE",
+    "_note": "即梦 MCP Logo 生成配置，需要自己申请 emcp-key 和 emcp-usercode"
   },
   
   "edgeone": {

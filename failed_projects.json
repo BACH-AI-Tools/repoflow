@@ -1,0 +1,419 @@
+{
+  "generated_at": "2025-12-05T10:38:12.527467",
+  "failed_projects": [
+    "animals_by_api_ninjas",
+    "bucket_list_by_api_ninjas",
+    "cars_by_api_ninjas",
+    "celebrity_by_api_ninjas",
+    "chuck_norris",
+    "city_by_api_ninjas",
+    "cocktail_by_api_ninjas",
+    "coinranking1",
+    "country_by_api_ninjas",
+    "covid_193",
+    "deezer_1",
+    "dictionary_by_api_ninjas",
+    "exercises_by_api_ninjas",
+    "facts_by_api_ninjas",
+    "geocoding_by_api_ninjas",
+    "geodb_cities",
+    "inflation_by_api_ninjas",
+    "jokes_by_api_ninjas",
+    "judge0_ce",
+    "lorem_ipsum_by_api_ninjas",
+    "nutrition_by_api_ninjas",
+    "qr_code_by_api_ninjas",
+    "quotes15",
+    "quotes_by_api_ninjas",
+    "random_word_by_api_ninjas",
+    "recipe_by_api_ninjas",
+    "riddles_by_api_ninjas",
+    "sentiment_by_api_ninjas",
+    "thesaurus_by_api_ninjas",
+    "timezone_by_location",
+    "trivia_by_api_ninjas",
+    "weatherapi_com",
+    "weather_by_api_ninjas",
+    "world_time_by_api_ninjas"
+  ],
+  "details": {
+    "animals_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\animals_by_api_ninjas",
+      "error": "请求超时，请检查网络连接",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline",
+        "push_code",
+        "trigger_publish",
+        "fetch_package",
+        "ai_generate",
+        "generate_logo"
+      ]
+    },
+    "bucket_list_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\bucket_list_by_api_ninjas",
+      "error": "请求超时，请检查网络连接",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline",
+        "push_code",
+        "trigger_publish",
+        "fetch_package",
+        "ai_generate",
+        "generate_logo"
+      ]
+    },
+    "cars_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\cars_by_api_ninjas",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/cars_by_api_ninjas.git/': Recv failure: Connection was reset'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    },
+    "celebrity_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\celebrity_by_api_ninjas",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/celebrity_by_api_ninjas.git/': Failed to connect to github.com port 443 after 21072 ms: Couldn't connect to server'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    },
+    "chuck_norris": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\chuck_norris",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/chuck_norris.git/': Failed to connect to github.com port 443 after 21146 ms: Couldn't connect to server'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    },
+    "city_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\city_by_api_ninjas",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/city_by_api_ninjas.git/': Failed to connect to github.com port 443 after 21073 ms: Couldn't connect to server'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    },
+    "cocktail_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\cocktail_by_api_ninjas",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/cocktail_by_api_ninjas.git/': Failed to connect to github.com port 443 after 21091 ms: Couldn't connect to server'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    },
+    "coinranking1": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\coinranking1",
+      "error": "请求超时，请检查网络连接",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline",
+        "push_code",
+        "trigger_publish",
+        "fetch_package",
+        "ai_generate",
+        "generate_logo"
+      ]
+    },
+    "country_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\country_by_api_ninjas",
+      "error": "请求超时，请检查网络连接",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline",
+        "push_code",
+        "trigger_publish",
+        "fetch_package",
+        "ai_generate",
+        "generate_logo"
+      ]
+    },
+    "covid_193": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\covid_193",
+      "error": "请求超时，请检查网络连接",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline",
+        "push_code",
+        "trigger_publish",
+        "fetch_package",
+        "ai_generate",
+        "generate_logo"
+      ]
+    },
+    "deezer_1": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\deezer_1",
+      "error": "请求超时，请检查网络连接",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline",
+        "push_code",
+        "trigger_publish",
+        "fetch_package",
+        "ai_generate",
+        "generate_logo"
+      ]
+    },
+    "dictionary_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\dictionary_by_api_ninjas",
+      "error": "请求超时，请检查网络连接",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline",
+        "push_code",
+        "trigger_publish",
+        "fetch_package",
+        "ai_generate",
+        "generate_logo"
+      ]
+    },
+    "exercises_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\exercises_by_api_ninjas",
+      "error": "请求超时，请检查网络连接",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline",
+        "push_code",
+        "trigger_publish",
+        "fetch_package",
+        "ai_generate",
+        "generate_logo"
+      ]
+    },
+    "facts_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\facts_by_api_ninjas",
+      "error": "请求超时，请检查网络连接",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline",
+        "push_code",
+        "trigger_publish",
+        "fetch_package",
+        "ai_generate",
+        "generate_logo"
+      ]
+    },
+    "geocoding_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\geocoding_by_api_ninjas",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/geocoding_by_api_ninjas.git/': Failed to connect to github.com port 443 after 21092 ms: Couldn't connect to server'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    },
+    "geodb_cities": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\geodb_cities",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/geodb_cities.git/': Failed to connect to github.com port 443 after 21111 ms: Couldn't connect to server'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    },
+    "inflation_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\inflation_by_api_ninjas",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/inflation_by_api_ninjas.git/': Failed to connect to github.com port 443 after 21099 ms: Couldn't connect to server'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    },
+    "jokes_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\jokes_by_api_ninjas",
+      "error": "请求超时，请检查网络连接",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline",
+        "push_code",
+        "trigger_publish",
+        "fetch_package",
+        "ai_generate",
+        "generate_logo"
+      ]
+    },
+    "judge0_ce": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\judge0_ce",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/judge0_ce.git/': Failed to connect to github.com port 443 after 21112 ms: Couldn't connect to server'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    },
+    "lorem_ipsum_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\lorem_ipsum_by_api_ninjas",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/lorem_ipsum_by_api_ninjas.git/': Failed to connect to github.com port 443 after 21081 ms: Couldn't connect to server'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    },
+    "nutrition_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\nutrition_by_api_ninjas",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/nutrition_by_api_ninjas.git/': Failed to connect to github.com port 443 after 21063 ms: Couldn't connect to server'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    },
+    "qr_code_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\qr_code_by_api_ninjas",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/qr_code_by_api_ninjas.git/': Failed to connect to github.com port 443 after 21116 ms: Couldn't connect to server'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    },
+    "quotes15": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\quotes15",
+      "error": "请求超时，请检查网络连接",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline",
+        "push_code",
+        "trigger_publish",
+        "fetch_package",
+        "ai_generate",
+        "generate_logo"
+      ]
+    },
+    "quotes_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\quotes_by_api_ninjas",
+      "error": "请求超时，请检查网络连接",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline",
+        "push_code",
+        "trigger_publish",
+        "fetch_package",
+        "ai_generate",
+        "generate_logo"
+      ]
+    },
+    "random_word_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\random_word_by_api_ninjas",
+      "error": "请求超时，请检查网络连接",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline",
+        "push_code",
+        "trigger_publish",
+        "fetch_package",
+        "ai_generate",
+        "generate_logo"
+      ]
+    },
+    "recipe_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\recipe_by_api_ninjas",
+      "error": "包未发布，停止流程以避免无效操作",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline",
+        "push_code"
+      ]
+    },
+    "riddles_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\riddles_by_api_ninjas",
+      "error": "包未发布，停止流程以避免无效操作",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline",
+        "push_code"
+      ]
+    },
+    "sentiment_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\sentiment_by_api_ninjas",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/sentiment_by_api_ninjas.git/': Failed to connect to github.com port 443 after 21116 ms: Couldn't connect to server'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    },
+    "thesaurus_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\thesaurus_by_api_ninjas",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/thesaurus_by_api_ninjas.git/': Failed to connect to github.com port 443 after 21089 ms: Couldn't connect to server'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    },
+    "timezone_by_location": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\timezone_by_location",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/timezone_by_location.git/': Failed to connect to github.com port 443 after 21082 ms: Couldn't connect to server'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    },
+    "trivia_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\trivia_by_api_ninjas",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/trivia_by_api_ninjas.git/': Failed to connect to github.com port 443 after 21114 ms: Couldn't connect to server'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    },
+    "weatherapi_com": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\weatherapi_com",
+      "error": "请求超时，请检查网络连接",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline",
+        "push_code",
+        "trigger_publish",
+        "fetch_package",
+        "ai_generate",
+        "generate_logo"
+      ]
+    },
+    "weather_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\weather_by_api_ninjas",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/weather_by_api_ninjas.git/': Failed to connect to github.com port 443 after 21100 ms: Couldn't connect to server'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    },
+    "world_time_by_api_ninjas": {
+      "path": "E:\\code\\APItoMCP\\generated_mcps\\world_time_by_api_ninjas",
+      "error": "Git 操作失败: Cmd('git') failed due to: exit code(128)\n  cmdline: git push --porcelain --set-upstream -- origin main:main\n  stderr: 'fatal: unable to access 'https://github.com/BACH-AI-Tools/world_time_by_api_ninjas.git/': Failed to connect to github.com port 443 after 21106 ms: Couldn't connect to server'",
+      "steps_completed": [
+        "scan",
+        "create_repo",
+        "generate_pipeline"
+      ]
+    }
+  }
+}

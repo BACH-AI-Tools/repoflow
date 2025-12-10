@@ -1,0 +1,63 @@
+# Pre-commit hooks 配置
+# 安装: pip install pre-commit && pre-commit install
+# 手动运行: pre-commit run --all-files
+
+repos:
+  # 基础代码检查
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: detect-private-key  # 检测私钥
+
+  # 敏感信息检测 - detect-secrets
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: package-lock\.json|yarn\.lock|\.secrets\.baseline
+
+  # 敏感信息检测 - gitleaks
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.1
+    hooks:
+      - id: gitleaks
+
+  # 自定义 Secret Scanner (使用项目内的扫描器)
+  - repo: local
+    hooks:
+      - id: repoflow-secret-scanner
+        name: RepoFlow Secret Scanner
+        entry: python -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path('.').absolute()))
+from src.secret_scanner import SecretScanner
+scanner = SecretScanner()
+issues = scanner.scan_directory(Path('.'))
+if issues:
+    print('❌ 发现敏感信息!')
+    for issue in issues[:10]:
+        print(f'  {issue[\"file\"]}:{issue[\"line\"]} - {issue[\"type\"]}')
+    if len(issues) > 10:
+        print(f'  ... 还有 {len(issues) - 10} 个问题')
+    sys.exit(1)
+print('✅ 未发现敏感信息')
+"
+        language: python
+        types: [python, javascript, typescript, json, yaml, text]
+        pass_filenames: false
+
+
+
+
+
+
+
+
