@@ -1,0 +1,65 @@
+{
+  "github": {
+    "org_name": "BACH-AI-Tools",
+    "private_repo": false,
+    "add_workflows": true,
+    "default_branch": "main"
+  },
+  "pypi": {
+    "use_test_pypi": true,
+    "auto_build": true,
+    "username": "__token__"
+  },
+  "npm": {
+    "registry": "https://registry.npmjs.org",
+    "public_access": true
+  },
+  "emcp": {
+    "enabled": true,
+    "generate_logo": true,
+    "test_after_publish": true,
+    "api_base": "https://api.emcp.ai"
+  },
+  "platforms": {
+    "lobehub": {
+      "enabled": true,
+      "url": "https://lobehub.com/MCP"
+    },
+    "mcpso": {
+      "enabled": true,
+      "url": "https://mcp.so/submit"
+    }
+  },
+  "crawler": {
+    "rapidapi": {
+      "use_selenium": false,
+      "enhance_description": true,
+      "output_dir": "generated_mcps"
+    },
+    "baidu": {
+      "max_products": 5,
+      "start_from": 1
+    }
+  },
+  "mcp": {
+    "default_transport": "stdio",
+    "default_version": "0.1.0",
+    "author": "",
+    "license": "MIT"
+  },
+  "azure_openai": {
+    "endpoint": "",
+    "api_key": "",
+    "deployment": "gpt-4o"
+  },
+  "agent_test": {
+    "enabled": true,
+    "default_prompt": "请使用此MCP工具执行一个测试操作",
+    "timeout": 30
+  },
+  "ui": {
+    "theme": "dark",
+    "language": "zh-CN",
+    "log_max_lines": 500
+  }
+}

@@ -1,0 +1,30 @@
+# MCP工厂 Web界面依赖
+
+# Web框架
+flask>=2.3.0
+flask-cors>=4.0.0
+
+# 浏览器自动化
+playwright>=1.40.0
+
+# 构建工具
+build>=1.0.0
+twine>=4.0.0
+
+# HTTP请求
+requests>=2.31.0
+httpx>=0.25.0
+
+# YAML解析
+pyyaml>=6.0.0
+
+# API规范解析
+openapi-spec-validator>=0.6.0
+
+# MCP框架
+fastmcp>=2.0.0
+
+# 其他工具
+click>=8.1.0
+rich>=13.0.0
+
