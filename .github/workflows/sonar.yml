@@ -1,0 +1,31 @@
+name: SonarQube Analysis
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  sonarqube:
+    name: SonarQube Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 扫描并等待质量门禁：门禁不通过，这一步失败，PR 不能合并
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v3
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectKey=BACH-AI-Tools_repoflow
+            -Dsonar.projectName=RepoFlow（MCP工厂）
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
