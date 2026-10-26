@@ -47,6 +47,7 @@ def main():
   2. 源仓库必须是一个有效的 Python 或 Node.js 项目
   3. 包名会自动添加前缀以避免冲突
   4. 首次推送后会自动触发 GitHub Actions 进行打包发布
+  5. 上游必须有允许再发布的开源许可证；会保留原 LICENSE，并写入 UPSTREAM.md 和 README 署名
         """
     )
     
@@ -72,6 +73,12 @@ def main():
         '--no-tests',
         action='store_true',
         help='跳过测试步骤'
+    )
+    
+    parser.add_argument(
+        '--accept-license',
+        action='store_true',
+        help='上游许可证无法自动识别时，人工确认允许再发布后继续'
     )
     
     args = parser.parse_args()
@@ -121,7 +128,8 @@ def main():
         result = executor.workflow_clone_and_publish(
             github_url=args.github_url,
             prefix=args.prefix,
-            output_dir=args.output
+            output_dir=args.output,
+            accept_unknown_license=args.accept_license
         )
         
         # 显示结果

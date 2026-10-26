@@ -328,9 +328,9 @@ class EMCPManager:
                     
                     # 尝试从配置获取手机号
                     try:
-                        from src.config_manager import ConfigManager
-                        config_mgr = ConfigManager()
-                        credentials = config_mgr.load_emcp_credentials()
+                        from src.unified_config_manager import UnifiedConfigManager
+                        config_mgr = UnifiedConfigManager()
+                        credentials = config_mgr.get_emcp_config()
                         
                         if credentials and credentials.get('phone_number'):
                             phone = credentials['phone_number']
@@ -341,7 +341,7 @@ class EMCPManager:
                             HTTPLogger.log(f"   ✅ 自动登录成功: {user_info.get('user_name')}")
                             
                             # 保存 Session
-                            config_mgr.save_session(self.session_key, user_info)
+                            config_mgr.set_emcp_session(self.session_key, user_info)
                             
                             # 重新发送请求
                             HTTPLogger.log(f"   🔄 重新发送请求...")
@@ -458,18 +458,17 @@ class EMCPManager:
             # 需要有 Azure OpenAI 客户端
             if not hasattr(self, '_ai_fixer'):
                 # 尝试创建 AI 修复器
-                from src.config_manager import ConfigManager
+                from src.unified_config_manager import UnifiedConfigManager
                 from src.error_fixer import AIErrorFixer
                 from openai import AzureOpenAI
                 
-                config_mgr = ConfigManager()
-                ai_config = config_mgr.load_azure_openai_config()
+                ai_config = UnifiedConfigManager().get_azure_openai_config()
                 
-                if not ai_config:
+                if not ai_config.get('endpoint') or not ai_config.get('api_key'):
                     return None
                 
                 client = AzureOpenAI(
-                    azure_endpoint=ai_config['azure_endpoint'],
+                    azure_endpoint=ai_config['endpoint'],
                     api_key=ai_config['api_key'],
                     api_version=ai_config.get('api_version', '2024-02-15-preview')
                 )
@@ -803,13 +802,13 @@ class EMCPManager:
             if response.status_code == 401 and auto_login_on_401:
                 HTTPLogger.log(f"\n🔐 检测到 401，自动登录并重试...")
                 try:
-                    from src.config_manager import ConfigManager
-                    config_mgr = ConfigManager()
-                    credentials = config_mgr.load_emcp_credentials()
+                    from src.unified_config_manager import UnifiedConfigManager
+                    config_mgr = UnifiedConfigManager()
+                    credentials = config_mgr.get_emcp_config()
                     
                     if credentials and credentials.get('phone_number'):
                         user_info = self.auto_login(credentials['phone_number'])
-                        config_mgr.save_session(self.session_key, user_info)
+                        config_mgr.set_emcp_session(self.session_key, user_info)
                         HTTPLogger.log(f"   ✅ 自动登录成功，重新查询...")
                         
                         # 重新查询
@@ -978,13 +977,13 @@ class EMCPManager:
             if response.status_code == 401 and auto_login_on_401:
                 HTTPLogger.log(f"\n🔐 检测到 401，自动登录并重试...")
                 try:
-                    from src.config_manager import ConfigManager
-                    config_mgr = ConfigManager()
-                    credentials = config_mgr.load_emcp_credentials()
+                    from src.unified_config_manager import UnifiedConfigManager
+                    config_mgr = UnifiedConfigManager()
+                    credentials = config_mgr.get_emcp_config()
                     
                     if credentials and credentials.get('phone_number'):
                         user_info = self.auto_login(credentials['phone_number'])
-                        config_mgr.save_session(self.session_key, user_info)
+                        config_mgr.set_emcp_session(self.session_key, user_info)
                         HTTPLogger.log(f"   ✅ 自动登录成功，重新获取...")
                         
                         # 重新获取
@@ -1058,13 +1057,13 @@ class EMCPManager:
             if response.status_code == 401 and auto_login_on_401:
                 HTTPLogger.log(f"\n🔐 检测到 401，自动登录并重试...")
                 try:
-                    from src.config_manager import ConfigManager
-                    config_mgr = ConfigManager()
-                    credentials = config_mgr.load_emcp_credentials()
+                    from src.unified_config_manager import UnifiedConfigManager
+                    config_mgr = UnifiedConfigManager()
+                    credentials = config_mgr.get_emcp_config()
                     
                     if credentials and credentials.get('phone_number'):
                         user_info = self.auto_login(credentials['phone_number'])
-                        config_mgr.save_session(self.session_key, user_info)
+                        config_mgr.set_emcp_session(self.session_key, user_info)
                         HTTPLogger.log(f"   ✅ 自动登录成功，重新获取...")
                         
                         # 重新获取

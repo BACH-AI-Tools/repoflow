@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """测试路由前缀限制"""
 
-from ai_generator import AITemplateGenerator
+from src.ai_generator import AITemplateGenerator
 
 
 def test_route_prefix_limit():
@@ -69,11 +69,10 @@ def test_route_prefix_limit():
         print("❌ 有测试失败！")
     print("=" * 60)
     
-    return all_passed
+    assert all_passed, "路由前缀超过 10 个字符"
 
 
 if __name__ == '__main__':
-    success = test_route_prefix_limit()
-    exit(0 if success else 1)
+    test_route_prefix_limit()
 
 

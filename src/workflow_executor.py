@@ -43,7 +43,8 @@ class WorkflowExecutor:
         self.package_command = None  # 从 README 提取的命令
         self.template_id = None
         self.env_vars_config = []  # 环境变量配置
-        
+        self.upstream_url = None  # 克隆发布时的上游仓库（用于署名）
+
         # 管理器实例（复用）
         self.emcp_manager = None
         self.agent_id = None  # Agent ID
@@ -213,13 +214,22 @@ class WorkflowExecutor:
         print(f"🌐 连接 GitHub API...")
         
         github_mgr = GitHubManager(github_token)
-        
+
+        # 设置窗口「默认创建私有仓库」
+        private = bool(self.config.get("other", {}).get("private_repo", False))
+        print(f"🔒 可见性: {'私有' if private else '公开'}")
+
+        if self.upstream_url:
+            description = f"{self.repo_name} - fork of {self.upstream_url}"
+        else:
+            description = f"{self.repo_name} - 由 MCP工厂自动创建"
+
         print(f"📝 创建仓库...")
         repo_url, is_new = github_mgr.create_repository(
             org_name=self.org_name,
             repo_name=self.repo_name,
-            description=f"{self.repo_name} - 由 MCP工厂自动创建",
-            private=False
+            description=description,
+            private=private
         )
         
         self.github_repo_url = repo_url
@@ -1870,7 +1880,8 @@ Output only the introduction text, no explanations."""
         self,
         github_url: str,
         prefix: str = "bachai",
-        output_dir: Optional[Path] = None
+        output_dir: Optional[Path] = None,
+        accept_unknown_license: bool = False
     ) -> Dict:
         """
         完整的克隆和发布工作流程
@@ -1888,6 +1899,7 @@ Output only the introduction text, no explanations."""
             github_url: 要克隆的GitHub仓库URL
             prefix: 包名前缀，默认为 "bachai"
             output_dir: 输出目录（可选）
+            accept_unknown_license: 上游许可证无法自动识别时，人工确认后继续
             
         Returns:
             Dict: 工作流程执行结果
@@ -1908,7 +1920,7 @@ Output only the introduction text, no explanations."""
         try:
             # ===== 步骤 1: 克隆并修改包名 =====
             self.update_progress(5)
-            cloner = RepoCloner(prefix=prefix)
+            cloner = RepoCloner(prefix=prefix, accept_unknown_license=accept_unknown_license)
             clone_result = cloner.clone_and_modify(github_url, output_dir, prefix)
             
             if not clone_result['success']:
@@ -1925,6 +1937,7 @@ Output only the introduction text, no explanations."""
             self.package_name = new_package_name
             self.package_type = project_type
             self.repo_name = new_package_name  # 使用新包名作为仓库名
+            self.upstream_url = github_url
             
             # 从项目中检测版本
             from src.project_detector import ProjectDetector

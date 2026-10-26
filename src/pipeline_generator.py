@@ -433,9 +433,13 @@ jobs:
         workflow_file = workflow_dir / 'pypi-publish.yml'
         workflow_file.write_text(workflow_content, encoding='utf-8')
         
-        # 生成 setup.py（如果不存在）
+        # 已有任一打包配置时不再生成，避免覆盖上游的包名、作者和许可证
         setup_py = project_path / 'setup.py'
-        if not setup_py.exists():
+        pyproject_toml = project_path / 'pyproject.toml'
+        has_packaging = setup_py.exists() or pyproject_toml.exists()
+        
+        # 生成 setup.py（如果不存在）
+        if not has_packaging:
             # 使用原始项目名作为包名，不自动添加前缀
             package_name = project_path.name.lower()
             setup_content = f'''"""Setup script for {project_path.name}"""
@@ -469,8 +473,7 @@ setup(
             setup_py.write_text(setup_content, encoding='utf-8')
         
         # 生成 pyproject.toml（现代 Python 打包）
-        pyproject_toml = project_path / 'pyproject.toml'
-        if not pyproject_toml.exists():
+        if not has_packaging:
             # 使用原始项目名作为包名，不自动添加前缀
             package_name = project_path.name.lower()
             toml_content = f'''[build-system]

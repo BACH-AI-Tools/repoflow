@@ -27,11 +27,28 @@ from src.secret_scanner import SecretScanner
 from src.pipeline_generator import PipelineGenerator
 from src.git_manager import GitManager
 from src.config_manager import ConfigManager
+from src.unified_config_manager import UnifiedConfigManager
 from src.docker_manager import DockerManager
 from src.pypi_manager import PyPIManager
 from src.project_detector import ProjectDetector
 
 console = Console()
+
+
+def load_cli_config() -> dict:
+    """
+    读取 CLI 配置：与 GUI 共用 ~/.repoflow/config.json，
+    旧版 CLI 保存在 ~/.emcpflow/config.json 的值仅作兜底
+    """
+    unified = UnifiedConfigManager()
+    # 文件不存在时 load_config() 返回默认值，会盖住旧配置里的组织名
+    config = unified.load_config() if unified.config_file.exists() else {}
+    legacy = ConfigManager().load_config()
+    return {
+        "github_token": config.get("github", {}).get("token") or legacy.get("github_token", ""),
+        "default_org": config.get("github", {}).get("org_name") or legacy.get("default_org", "BACH-AI-Tools"),
+        "dockerhub_username": config.get("dockerhub", {}).get("username") or legacy.get("dockerhub_username", ""),
+    }
 
 
 @click.group()
@@ -46,20 +63,21 @@ def config():
     """配置 RepoFlow（GitHub Token 等）"""
     console.print(Panel.fit("🔧 RepoFlow 配置", style="bold blue"))
     
-    config_mgr = ConfigManager()
+    config_mgr = UnifiedConfigManager()
     
     github_token = click.prompt("请输入 GitHub Personal Access Token", hide_input=True)
-    default_org = click.prompt("默认 GitHub 组织名称", default="BACH-AI-Tools")
+    default_org = click.prompt("默认 GitHub 组织名称", default=config_mgr.get_github_org())
     dockerhub_username = click.prompt("DockerHub 用户名（可选）", default="")
     
-    config_mgr.save_config({
-        "github_token": github_token,
-        "default_org": default_org,
-        "dockerhub_username": dockerhub_username,
-        "npm_registry": "https://registry.npmjs.org"
-    })
+    # 只更新相关字段，保留 GUI 中保存的其他配置
+    config = config_mgr.load_config()
+    config.setdefault("github", {}).update({"token": github_token, "org_name": default_org})
+    config.setdefault("dockerhub", {})["username"] = dockerhub_username
+    if not config_mgr.save_config(config):
+        console.print("❌ 保存配置失败", style="bold red")
+        sys.exit(1)
     
-    console.print("✅ 配置已保存!", style="bold green")
+    console.print(f"✅ 配置已保存到 {config_mgr.get_config_file_path()}（与 GUI 共用）", style="bold green")
 
 
 @cli.command()
@@ -81,11 +99,10 @@ def init(org, repo, path, private, pipeline, skip_scan, setup_secrets, deploy_me
     """初始化并发布项目到 GitHub（完整流程）"""
     console.print(Panel.fit("🚀 RepoFlow 自动化发布流程", style="bold magenta"))
     
-    config_mgr = ConfigManager()
-    config = config_mgr.load_config()
+    config = load_cli_config()
     
     if not config.get('github_token'):
-        console.print("❌ 请先运行 'repoflow config' 配置 GitHub Token", style="bold red")
+        console.print("❌ 请先运行 'repoflow config' 或在 GUI 设置中配置 GitHub Token", style="bold red")
         sys.exit(1)
     
     org = org or config.get('default_org', 'BACH-AI-Tools')
@@ -415,8 +432,7 @@ def docker(image, tag, username, password, build_only, path):
         console.print("请先安装 Docker: https://docs.docker.com/get-docker/")
         sys.exit(1)
     
-    config_mgr = ConfigManager()
-    config = config_mgr.load_config()
+    config = load_cli_config()
     
     # 如果未提供用户名，尝试从配置读取
     if not username and not build_only:

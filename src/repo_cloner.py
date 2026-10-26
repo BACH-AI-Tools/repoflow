@@ -9,22 +9,43 @@ import tempfile
 import json
 
 
+# 允许再发布的许可证：(SPDX ID, 许可证正文特征)，按顺序匹配
+KNOWN_LICENSES = [
+    ('AGPL-3.0', r'GNU AFFERO GENERAL PUBLIC LICENSE'),
+    ('LGPL', r'GNU LESSER GENERAL PUBLIC LICENSE'),
+    ('GPL', r'GNU GENERAL PUBLIC LICENSE'),
+    ('Apache-2.0', r'Apache License,?\s+Version 2\.0'),
+    ('MPL-2.0', r'Mozilla Public License,?\s+(Version|v\.?)\s*2\.0'),
+    ('MIT', r'Permission is hereby granted,?\s+free of charge'),
+    ('BSD-3-Clause', r'Neither the name of'),
+    ('BSD-2-Clause', r'Redistribution and use in source and binary forms'),
+    ('ISC', r'Permission to use, copy, modify, and/?or distribute this software for any\s+purpose'),
+    ('Unlicense', r'This is free and unencumbered software released into the public domain'),
+]
+
+LICENSE_FILE_NAMES = ('LICENSE', 'LICENCE', 'COPYING', 'LICENSE-MIT', 'LICENSE-APACHE')
+
+
 class RepoCloner:
     """克隆GitHub仓库并修改包名"""
-    
-    def __init__(self, prefix: str = "bachai"):
+
+    def __init__(self, prefix: str = "bachai", accept_unknown_license: bool = False):
         """
         初始化克隆器
-        
+
         Args:
             prefix: 包名前缀，默认为 "bachai"
+            accept_unknown_license: 许可证文件存在但无法自动识别时，是否在人工确认后继续
         """
         self.prefix = prefix
+        self.accept_unknown_license = accept_unknown_license
         self.temp_dir = None
         self.cloned_repo_path = None
         self.original_package_name = None
         self.new_package_name = None
         self.project_type = None
+        self.license_id = None
+        self.license_file = None
     
     def clone_repository(self, github_url: str, target_dir: Optional[Path] = None) -> Path:
         """
@@ -306,6 +327,121 @@ class RepoCloner:
         except Exception as e:
             raise Exception(f"修改 package.json 失败: {e}")
     
+    def check_license(self, repo_path: Path) -> str:
+        """
+        检查上游许可证是否允许再发布
+
+        没有许可证文件 = 保留所有权利，不能再发布；
+        许可证无法识别时，需人工确认后通过 accept_unknown_license 放行。
+
+        Args:
+            repo_path: 仓库路径
+
+        Returns:
+            str: 许可证 SPDX ID
+        """
+        print(f"\n{'='*60}")
+        print(f"步骤: 检查上游许可证")
+        print(f"{'='*60}")
+
+        license_file = None
+        for f in sorted(repo_path.iterdir()):
+            if f.is_file() and f.stem.upper() in LICENSE_FILE_NAMES:
+                license_file = f
+                break
+
+        if not license_file:
+            raise Exception(
+                "上游仓库没有 LICENSE 文件（默认保留所有权利），不能再发布。"
+                "请联系原作者添加开源许可证或取得授权"
+            )
+
+        text = license_file.read_text(encoding='utf-8', errors='ignore')
+        license_id = None
+        for spdx_id, pattern in KNOWN_LICENSES:
+            if re.search(pattern, text, re.IGNORECASE):
+                license_id = spdx_id
+                break
+
+        if not license_id:
+            if not self.accept_unknown_license:
+                raise Exception(
+                    f"无法识别上游许可证（{license_file.name}），请人工确认允许再发布后，"
+                    f"使用 --accept-license 继续"
+                )
+            license_id = 'see LICENSE'
+            print(f"⚠️  许可证无法自动识别，已人工确认: {license_file.name}")
+
+        print(f"📜 许可证: {license_id}（{license_file.name}）")
+        if license_id in ('AGPL-3.0', 'LGPL', 'GPL', 'MPL-2.0'):
+            print(f"💡 Copyleft 许可证：再发布的包必须继续使用 {license_id} 并公开源码")
+
+        self.license_id = license_id
+        self.license_file = license_file.name
+        return license_id
+
+    def add_attribution(self, repo_path: Path, github_url: str):
+        """
+        写入上游署名：新增 UPSTREAM.md，并在 README 顶部加 fork 说明
+
+        原有 LICENSE / NOTICE / 作者信息保持不变。
+
+        Args:
+            repo_path: 仓库路径
+            github_url: 上游仓库 URL
+        """
+        print(f"\n{'='*60}")
+        print(f"步骤: 写入上游署名")
+        print(f"{'='*60}")
+
+        upstream_url = github_url.rstrip('/')
+        if upstream_url.endswith('.git'):
+            upstream_url = upstream_url[:-4]
+
+        commit = ''
+        try:
+            result = subprocess.run(
+                ['git', 'rev-parse', 'HEAD'],
+                cwd=repo_path, capture_output=True, text=True, timeout=30
+            )
+            commit = result.stdout.strip()
+        except Exception:
+            pass
+
+        upstream_md = repo_path / 'UPSTREAM.md'
+        upstream_md.write_text(
+            f"# Upstream\n\n"
+            f"This package is a republished fork of [{upstream_url}]({upstream_url}).\n"
+            f"All credit for the original work goes to its authors.\n\n"
+            f"- Upstream repository: {upstream_url}\n"
+            f"- Upstream commit: {commit or 'unknown'}\n"
+            f"- Original package name: `{self.original_package_name}`\n"
+            f"- Republished as: `{self.new_package_name}`\n"
+            f"- License: {self.license_id} (unchanged, see [{self.license_file}]({self.license_file}))\n\n"
+            f"## Changes\n\n"
+            f"- Package renamed from `{self.original_package_name}` to `{self.new_package_name}`\n"
+            f"- Added CI/CD publishing workflow\n",
+            encoding='utf-8'
+        )
+        print(f"  ✓ 写入 UPSTREAM.md")
+
+        notice = (
+            f"> **Fork notice:** this package is a republished fork of "
+            f"[{upstream_url}]({upstream_url}) (original package `{self.original_package_name}`). "
+            f"All credit goes to the original authors. It is distributed under the original "
+            f"license ({self.license_id}) — see [{self.license_file}]({self.license_file}) "
+            f"and [UPSTREAM.md](UPSTREAM.md).\n\n"
+        )
+        readme = next((f for f in sorted(repo_path.iterdir())
+                       if f.is_file() and f.name.lower() == 'readme.md'), None)
+        if readme:
+            content = readme.read_text(encoding='utf-8', errors='ignore')
+            if 'Fork notice:' not in content:
+                readme.write_text(notice + content, encoding='utf-8')
+                print(f"  ✓ README 顶部加入 fork 说明")
+        else:
+            print(f"  ⚠️  未找到 README.md，仅写入 UPSTREAM.md")
+
     def _extract_repo_name(self, github_url: str) -> str:
         """
         从GitHub URL提取仓库名称
@@ -368,9 +504,15 @@ class RepoCloner:
             if not original_name:
                 raise Exception("无法获取包名")
             
-            # 4. 修改包名
+            # 4. 检查许可证（不允许再发布则中止）
+            license_id = self.check_license(repo_path)
+
+            # 5. 修改包名
             old_name, new_name = self.modify_package_name(repo_path, prefix)
-            
+
+            # 6. 写入上游署名
+            self.add_attribution(repo_path, github_url)
+
             print(f"\n{'='*60}")
             print(f"✅ 处理完成")
             print(f"{'='*60}")
@@ -378,13 +520,15 @@ class RepoCloner:
             print(f"📦 原始包名: {old_name}")
             print(f"📦 新包名: {new_name}")
             print(f"🔧 项目类型: {project_type}")
-            
+            print(f"📜 许可证: {license_id}")
+
             return {
                 'success': True,
                 'repo_path': repo_path,
                 'project_type': project_type,
                 'original_package_name': old_name,
-                'new_package_name': new_name
+                'new_package_name': new_name,
+                'license': license_id
             }
             
         except Exception as e:
