@@ -19,7 +19,7 @@
 11. ✅ **Agent 测试** - 创建 Agent 并绑定 MCP
 12. ✅ **SignalR 对话测试** - 完整的对话测试
 
-**环境变量 API_KEY 已预设为:** `c73d0eb842msh082900adbe7d22cp15a3e0jsn8156d94adb0d`
+**环境变量 API_KEY 已预设为:** `YOUR_RAPIDAPI_KEY`
 
 ---
 

@@ -490,7 +490,7 @@ API 自动获取：
 {
   "azure_openai": {
     "azure_endpoint": "https://jinderu.openai.azure.com",
-    "api_key": "b446430bf5f44e69bfed45a581845bb4",
+    "api_key": "YOUR_AZURE_OPENAI_KEY",
     "deployment_name": "gpt-4o",
     "api_version": "2024-02-15-preview"
   }

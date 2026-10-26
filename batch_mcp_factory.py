@@ -284,7 +284,7 @@ class BatchMCPFactory:
                     
                     # 自动填充已知的环境变量
                     if var_name == 'API_KEY':
-                        var_config['example'] = 'c73d0eb842msh082900adbe7d22cp15a3e0jsn8156d94adb0d'
+                        var_config['example'] = os.environ.get('API_KEY', '')
                         var_config['description'] = 'API 密钥'
                         print(f"   ✅ 自动填充: API_KEY")
                     elif var_name == 'HOST':
@@ -443,7 +443,7 @@ class BatchMCPFactory:
         print(f"🏭 批量 MCP 工厂")
         print(f"{'='*70}")
         print(f"总项目数: {total}")
-        print(f"环境变量 API_KEY: 已配置")
+        print(f"环境变量 API_KEY: {'已配置' if os.environ.get('API_KEY') else '未配置'}")
         print(f"{'='*70}")
         
         # 开始处理
