@@ -46,6 +46,7 @@ class RepoCloner:
         self.project_type = None
         self.license_id = None
         self.license_file = None
+        self.original_author = None
     
     def clone_repository(self, github_url: str, target_dir: Optional[Path] = None) -> Path:
         """
@@ -408,6 +409,8 @@ class RepoCloner:
         except Exception:
             pass
 
+        self.original_author = self._get_original_author(repo_path, upstream_url)
+
         upstream_md = repo_path / 'UPSTREAM.md'
         upstream_md.write_text(
             f"# Upstream\n\n"
@@ -415,6 +418,7 @@ class RepoCloner:
             f"All credit for the original work goes to its authors.\n\n"
             f"- Upstream repository: {upstream_url}\n"
             f"- Upstream commit: {commit or 'unknown'}\n"
+            f"- Original author(s): {self.original_author}\n"
             f"- Original package name: `{self.original_package_name}`\n"
             f"- Republished as: `{self.new_package_name}`\n"
             f"- License: {self.license_id} (unchanged, see [{self.license_file}]({self.license_file}))\n\n"
@@ -427,7 +431,8 @@ class RepoCloner:
 
         notice = (
             f"> **Fork notice:** this package is a republished fork of "
-            f"[{upstream_url}]({upstream_url}) (original package `{self.original_package_name}`). "
+            f"[{upstream_url}]({upstream_url}) (original package `{self.original_package_name}`, "
+            f"by {self.original_author}). "
             f"All credit goes to the original authors. It is distributed under the original "
             f"license ({self.license_id}) — see [{self.license_file}]({self.license_file}) "
             f"and [UPSTREAM.md](UPSTREAM.md).\n\n"
@@ -441,6 +446,44 @@ class RepoCloner:
                 print(f"  ✓ README 顶部加入 fork 说明")
         else:
             print(f"  ⚠️  未找到 README.md，仅写入 UPSTREAM.md")
+
+    def _get_original_author(self, repo_path: Path, upstream_url: str) -> str:
+        """
+        读取上游作者：依次查 package.json / pyproject.toml / setup.py，
+        都没有则用上游仓库的 GitHub 用户名
+
+        Args:
+            repo_path: 仓库路径
+            upstream_url: 上游仓库 URL
+
+        Returns:
+            str: 上游作者
+        """
+        package_json = repo_path / 'package.json'
+        if package_json.exists():
+            try:
+                author = json.loads(package_json.read_text(encoding='utf-8')).get('author')
+                if isinstance(author, dict):
+                    author = author.get('name')
+                if author:
+                    return str(author)
+            except Exception:
+                pass
+
+        patterns = [
+            ('pyproject.toml', r'authors\s*=\s*\[\s*\{[^}]*name\s*=\s*["\']([^"\']+)["\']'),
+            ('setup.py', r'author\s*=\s*["\']([^"\']+)["\']'),
+        ]
+        for file_name, pattern in patterns:
+            f = repo_path / file_name
+            if f.exists():
+                match = re.search(pattern, f.read_text(encoding='utf-8', errors='ignore'))
+                if match:
+                    return match.group(1)
+
+        # https://github.com/<owner>/<repo> 或 git@github.com:<owner>/<repo>
+        parts = re.split(r'[/:]', upstream_url)
+        return parts[-2] if len(parts) >= 2 else 'unknown'
 
     def _extract_repo_name(self, github_url: str) -> str:
         """
@@ -528,7 +571,8 @@ class RepoCloner:
                 'project_type': project_type,
                 'original_package_name': old_name,
                 'new_package_name': new_name,
-                'license': license_id
+                'license': license_id,
+                'original_author': self.original_author
             }
             
         except Exception as e:

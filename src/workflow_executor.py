@@ -44,6 +44,8 @@ class WorkflowExecutor:
         self.template_id = None
         self.env_vars_config = []  # 环境变量配置
         self.upstream_url = None  # 克隆发布时的上游仓库（用于署名）
+        self.upstream_author = None  # 上游作者
+        self.upstream_license = None  # 上游许可证
 
         # 管理器实例（复用）
         self.emcp_manager = None
@@ -198,6 +200,19 @@ class WorkflowExecutor:
         print(f"🔗 SonarQube 项目: {project_url}")
         
         print(f"✅ 步骤完成\n")
+    
+    def _upstream_attribution(self) -> Dict[str, str]:
+        """克隆发布时追加到模板描述末尾的上游署名（非克隆发布返回空串）"""
+        if not self.upstream_url:
+            return {"zh_cn": "", "zh_tw": "", "en": ""}
+        
+        author = self.upstream_author or "unknown"
+        license_id = self.upstream_license or "see LICENSE"
+        return {
+            "zh_cn": f"\n\n---\n本项目基于 {self.upstream_url} 再发布，原作者：{author}，许可证：{license_id}。",
+            "zh_tw": f"\n\n---\n本專案基於 {self.upstream_url} 再發布，原作者：{author}，授權條款：{license_id}。",
+            "en": f"\n\n---\nRepublished from {self.upstream_url}. Original author: {author}. License: {license_id}.",
+        }
     
     def step_create_repo(self):
         """创建GitHub仓库"""
@@ -1009,7 +1024,7 @@ Output only the introduction text, no explanations."""
                     "summary": project_info.get('description', f"{self.package_name} MCP Server"),
                     "description": readme_content,
                     "readme": readme_content,
-                    "author": "BACH Studio"
+                    "author": self.upstream_author or "BACH Studio"
                 }
             }
             
@@ -1399,11 +1414,14 @@ Output only the introduction text, no explanations."""
             else:
                 print(f"   ℹ️ 无需环境变量配置")
             
+            # 克隆发布：模板描述末尾注明上游作者、许可证和来源
+            attribution = self._upstream_attribution()
+            
             # 使用build_template_data构建完整数据
             full_template_data = emcp_mgr.build_template_data(
                 name=self.template_data.get("name_zh_cn", self.package_name),
                 summary=self.template_data.get("summary_zh_cn", f"{self.package_name} MCP服务器"),  # ✅ 使用摘要字段
-                description=self.template_data.get("description_zh_cn", f"{self.package_name} MCP服务器"),  # ✅ 使用描述字段
+                description=self.template_data.get("description_zh_cn", f"{self.package_name} MCP服务器") + attribution["zh_cn"],  # ✅ 使用描述字段
                 logo_url=logo_url,  # 使用AI生成的Logo或默认Logo
                 template_category_id=template_category_id,  # 使用获取的分类ID
                 template_source_id=self.package_name,  # 使用包名作为来源ID
@@ -1413,10 +1431,10 @@ Output only the introduction text, no explanations."""
                 args=args_list,  # ✅ 添加环境变量配置
                 name_en=self.template_data.get("name_en", self.package_name),
                 summary_en=self.template_data.get("summary_en", f"{self.package_name} MCP Server"),  # ✅ 使用摘要字段
-                description_en=self.template_data.get("description_en", f"{self.package_name} MCP Server"),  # ✅ 使用描述字段
+                description_en=self.template_data.get("description_en", f"{self.package_name} MCP Server") + attribution["en"],  # ✅ 使用描述字段
                 name_tw=self.template_data.get("name_zh_tw", self.package_name),
                 summary_tw=self.template_data.get("summary_zh_tw", f"{self.package_name} MCP伺服器"),  # ✅ 使用摘要字段
-                description_tw=self.template_data.get("description_zh_tw", f"{self.package_name} MCP伺服器")  # ✅ 使用描述字段
+                description_tw=self.template_data.get("description_zh_tw", f"{self.package_name} MCP伺服器") + attribution["zh_tw"]  # ✅ 使用描述字段
             )
             
             print(f"📦 包名: {self.package_name}")
@@ -1938,6 +1956,8 @@ Output only the introduction text, no explanations."""
             self.package_type = project_type
             self.repo_name = new_package_name  # 使用新包名作为仓库名
             self.upstream_url = github_url
+            self.upstream_author = clone_result.get('original_author')
+            self.upstream_license = clone_result.get('license')
             
             # 从项目中检测版本
             from src.project_detector import ProjectDetector
