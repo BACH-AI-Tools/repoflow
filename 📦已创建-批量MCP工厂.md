@@ -319,7 +319,7 @@ outputs/
 }
 ```
 
-**环境变量 API_KEY 已预设：** `c73d0eb842msh082900adbe7d22cp15a3e0jsn8156d94adb0d`
+**环境变量 API_KEY 已预设：** `YOUR_RAPIDAPI_KEY`
 
 ---
 

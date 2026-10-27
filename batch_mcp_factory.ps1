@@ -14,8 +14,10 @@ Write-Host "🏭 批量 MCP 工厂" -ForegroundColor Green
 Write-Host "=" -NoNewline -ForegroundColor Cyan
 Write-Host ("=" * 69) -ForegroundColor Cyan
 
-# 设置环境变量
-$env:API_KEY = "c73d0eb842msh082900adbe7d22cp15a3e0jsn8156d94adb0d"
+# API_KEY 从环境变量读取，不要写进脚本
+if ([string]::IsNullOrEmpty($env:API_KEY)) {
+    $env:API_KEY = Read-Host "请输入 API_KEY（RapidAPI Key）"
+}
 
 # 如果没有提供项目目录，提示用户输入
 if ([string]::IsNullOrEmpty($ProjectsDir)) {

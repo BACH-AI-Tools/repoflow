@@ -574,7 +574,7 @@ def demo_complete_workflow():
     demo = AgentPlatformDemo()
     
     # 配置参数（请根据实际情况修改）
-    PHONE = "17610785055"
+    PHONE = "YOUR_PHONE_NUMBER"
     VALIDATION_CODE = datetime.now().strftime("%m%Y%d")  # 格式：MMyyyydd
     MCP_NAME = "测试MCP"  # 要查找的 MCP 名称
     AGENT_NAME = f"{MCP_NAME} 测试 Agent"
@@ -723,7 +723,7 @@ def demo_individual_apis():
     # 示例 1: 只登录
     print("\n【示例 1】仅登录")
     print("-"*70)
-    phone = "17610785055"
+    phone = "YOUR_PHONE_NUMBER"
     validation_code = datetime.now().strftime("%m%Y%d")
     demo.login(phone, validation_code)
     

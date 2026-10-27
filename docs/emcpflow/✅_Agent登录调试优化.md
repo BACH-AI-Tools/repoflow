@@ -82,7 +82,7 @@ else:
 ```
 📋 步骤 1/7: 登录 Agent 平台...
    📤 POST https://v5.kaleido.guru/api/authentication/...
-   📱 手机号: 17610785055
+   📱 手机号: YOUR_PHONE_NUMBER
    🔑 验证码: 11202507
    📥 响应: 200
    
@@ -91,7 +91,7 @@ else:
      "session_key": "8e315ab6-d708-450a-abd0-a30c61aff4a7",
      "avatar": "",
      "user_name": "富国AI脑",
-     "login_phone": "17610785055",
+     "login_phone": "YOUR_PHONE_NUMBER",
      "login_email": null,
      "uid": 95,
      "date_format": "YYYY-MM-DD HH:mm"

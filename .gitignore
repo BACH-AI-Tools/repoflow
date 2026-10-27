@@ -39,6 +39,8 @@ Thumbs.db
 # Config
 .repoflow/
 config.local.json
+config.json
+.env
 
 # Logs
 *.log
