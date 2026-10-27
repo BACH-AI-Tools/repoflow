@@ -21,8 +21,10 @@ def build():
     """构建 RepoFlow 可执行文件"""
     
     # 获取项目根目录
-    root_dir = Path(__file__).parent
-    
+    root_dir = Path(__file__).parent.resolve()
+    # PyInstaller 的相对路径（入口、src 数据目录、输出目录）都以项目根目录为准
+    os.chdir(root_dir)
+
     # 根据平台设置文件名
     if sys.platform == 'win32':
         app_name = 'RepoFlow.exe'
@@ -34,12 +36,17 @@ def build():
     print(f"Platform: {sys.platform}")
     print()
     
+    # 主程序入口（MCP工厂 GUI）
+    entry_script = 'mcp_factory_gui.py'
+    if not (root_dir / entry_script).exists():
+        raise FileNotFoundError(f"入口文件不存在: {root_dir / entry_script}")
+
     # 数据文件分隔符（Windows 用 ; 其他用 :）
     data_separator = ';' if sys.platform == 'win32' else ':'
     
     # PyInstaller 参数
     args = [
-        'repoflow_gui.py',          # 主程序
+        entry_script,                # 主程序
         '--name=RepoFlow',           # 应用名称
         '--onefile',                 # 打包成单个文件
         

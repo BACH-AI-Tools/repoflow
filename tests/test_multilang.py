@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """测试多语言生成"""
 
-from emcp_manager import EMCPManager
-from chinese_converter import ChineseConverter
+from src.emcp_manager import EMCPManager
+from src.chinese_converter import ChineseConverter
 
 
 def test_multi_lang():
     """测试多语言数组生成"""
     
     emcp_mgr = EMCPManager()
+    converter = ChineseConverter()
     
     test_cases = [
         ("智能文件搜索服务器", "Intelligent File Search Server"),
@@ -32,7 +33,9 @@ def test_multi_lang():
         print(f"  输入 (简体): {zh_cn}")
         print(f"  输入 (英文): {en}")
         
-        result = emcp_mgr.make_multi_lang(zh_cn, en)
+        # 繁体由调用方（LLM / 转换器）提供，make_multi_lang 只负责组装
+        zh_tw = converter.to_traditional(zh_cn)
+        result = emcp_mgr.make_multi_lang(zh_cn, zh_tw, en)
         
         print(f"\n  输出:")
         for item in result:
@@ -47,15 +50,14 @@ def test_multi_lang():
         
         # 检查内容
         assert result[0]['content'] == zh_cn, "简体内容应该一致"
+        assert result[1]['content'] == zh_tw, "繁体内容应该一致"
         assert result[2]['content'] == en, "英文内容应该一致"
         
-        # 检查繁体是否和简体不同（对于包含常用字的情况）
-        zh_tw = result[1]['content']
-        if any(char in zh_cn for char in ['个', '为', '务', '发', '网', '数', '据', '档', '检', '服']):
-            assert zh_tw != zh_cn, f"繁体应该和简体不同: {zh_cn} vs {zh_tw}"
-            print(f"  ✅ 繁体转换成功: {zh_tw[:50]}...")
-        
         print(f"  ✅ 测试通过")
+    
+    # 未提供繁体/英文时回退为简体
+    result = emcp_mgr.make_multi_lang("网页解析")
+    assert [item['content'] for item in result] == ["网页解析"] * 3, "缺省语言应回退为简体"
     
     print("\n" + "=" * 80)
     print("✅ 所有测试通过！")
