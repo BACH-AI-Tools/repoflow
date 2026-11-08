@@ -17,11 +17,20 @@ if sys.platform == 'win32':
     # 设置环境变量
     os.environ['PYTHONIOENCODING'] = 'utf-8'
 
+# 主程序入口（MCP工厂 GUI，与 run-mcp-factory.bat 启动的是同一个文件）
+ENTRY_SCRIPT = 'mcp_factory_gui.py'
+
+
 def build():
     """构建 RepoFlow 可执行文件"""
     
     # 获取项目根目录
-    root_dir = Path(__file__).parent
+    root_dir = Path(__file__).parent.resolve()
+    # PyInstaller 的相对路径（入口、src 数据目录、输出目录）都以项目根目录为准
+    os.chdir(root_dir)
+
+    if not (root_dir / ENTRY_SCRIPT).is_file():
+        raise FileNotFoundError(f"入口文件不存在: {root_dir / ENTRY_SCRIPT}")
     
     # 根据平台设置文件名
     if sys.platform == 'win32':
@@ -39,7 +48,7 @@ def build():
     
     # PyInstaller 参数
     args = [
-        'repoflow_gui.py',          # 主程序
+        ENTRY_SCRIPT,                # 主程序
         '--name=RepoFlow',           # 应用名称
         '--onefile',                 # 打包成单个文件
         
