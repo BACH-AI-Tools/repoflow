@@ -64,3 +64,17 @@ jobs:
             | "新代码起点: \($s.period.mode // "-") \($s.period.parameter // "") \($s.period.date // "")",
               ($s.conditions[] | select(.status == "ERROR")
                | "::error title=质量门禁没过::\(.metricKey) = \(.actualValue)（要求 \(if .comparator == "GT" then "≤" else "≥" end) \(.errorThreshold)）")'
+
+      - name: List issues in changed files
+        if: always()
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          sleep 5
+          # 只看这个分支新增的行：git diff -U0 的 @@ +start,count @@ 换成 "文件:行号" 列表
+          git diff -U0 "origin/main"...HEAD | awk '/^\+\+\+ b\//{f=substr($0,7)} /^@@/{split($3,a,","); s=substr(a[1],2); n=(a[2]==""?1:a[2]); for(i=0;i<n;i++) print f":"(s+i)}' > /tmp/added.txt
+          for f in $(git diff --name-only --diff-filter=AM "origin/main"...HEAD); do
+            curl -s -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/issues/search?components=BACH-AI-Tools_repoflow:$f&resolved=false&ps=500" | jq -r --arg f "$f" '.issues[]? | "\($f):\(.line // 0)\tISSUE \(.rule) \(.severity)\t\(.message)"'
+            curl -s -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/hotspots/search?projectKey=BACH-AI-Tools_repoflow&files=$f&status=TO_REVIEW&ps=500" | jq -r --arg f "$f" '.hotspots[]? | "\($f):\(.line // 0)\tHOTSPOT \(.ruleKey)\t\(.message)"'
+          done | awk -F'\t' 'NR==FNR{added[$0]=1; next} ($1 in added){print "SONAR-NEW " $0}' /tmp/added.txt -
