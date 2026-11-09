@@ -69,6 +69,12 @@ def main():
     )
     
     parser.add_argument(
+        '--allow-unlicensed',
+        action='store_true',
+        help='上游没有许可证文件时也继续（仅在已取得原作者书面许可时使用；会记录在 UPSTREAM.md）'
+    )
+
+    parser.add_argument(
         '--no-tests',
         action='store_true',
         help='跳过测试步骤'
@@ -121,7 +127,8 @@ def main():
         result = executor.workflow_clone_and_publish(
             github_url=args.github_url,
             prefix=args.prefix,
-            output_dir=args.output
+            output_dir=args.output,
+            allow_unlicensed=args.allow_unlicensed
         )
         
         # 显示结果
