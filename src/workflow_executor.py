@@ -214,12 +214,16 @@ class WorkflowExecutor:
         
         github_mgr = GitHubManager(github_token)
         
+        # 设置窗口「默认创建私有仓库」（只对新建仓库生效）
+        private = bool(self.config.get("other", {}).get("private_repo", False))
+        print(f"🔒 可见性: {'私有' if private else '公开'}")
+
         print(f"📝 创建仓库...")
         repo_url, is_new = github_mgr.create_repository(
             org_name=self.org_name,
             repo_name=self.repo_name,
             description=f"{self.repo_name} - 由 MCP工厂自动创建",
-            private=False
+            private=private
         )
         
         self.github_repo_url = repo_url
@@ -227,7 +231,7 @@ class WorkflowExecutor:
         if is_new:
             print(f"✅ 仓库创建成功")
         else:
-            print(f"ℹ️ 仓库已存在")
+            print(f"ℹ️ 仓库已存在（可见性保持不变）")
         
         print(f"🔗 仓库地址: {repo_url}")
         print(f"✅ 步骤完成\n")
