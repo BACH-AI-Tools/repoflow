@@ -23,7 +23,7 @@ python emcpflow_gui.py
 
 ### 1. 登录 EMCP
 
-- 手机号：`17610785055`
+- 手机号：`YOUR_PHONE_NUMBER`
 - 验证码：`11202505`
 - 点击"登录"
 

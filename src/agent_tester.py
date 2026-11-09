@@ -607,7 +607,7 @@ class AgentTester:
         template_id: str,
         mcp_name: str,
         mcp_description: str,
-        phone: str = "17610785055"
+        phone: Optional[str] = None
     ) -> Dict:
         """
         完整的 Agent 集成测试流程
@@ -637,6 +637,13 @@ class AgentTester:
         try:
             # 步骤 1: 登录 Agent 平台
             AgentTesterLogger.log("\n📋 步骤 1/7: 登录 Agent 平台...")
+            
+            # 未指定手机号时使用设置中的 Agent 平台手机号
+            if not phone:
+                from src.unified_config_manager import UnifiedConfigManager
+                phone = UnifiedConfigManager().get_agent_config().get('phone_number')
+            if not phone:
+                raise Exception("未配置 Agent 平台手机号，请在设置中填写")
             
             # 生成验证码（格式 MMyyyydd = 月+年+日）
             validation_code = datetime.now().strftime("%m%Y%d")  # ⭐ 修正：只有一个 %d
@@ -844,7 +851,7 @@ def test_agent_with_mcp(
     mcp_name: str,
     mcp_description: str,
     ai_generator=None,
-    phone: str = "17610785055"
+    phone: Optional[str] = None
 ) -> Dict:
     """
     测试 Agent + MCP 集成

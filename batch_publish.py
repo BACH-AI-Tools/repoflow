@@ -4,6 +4,7 @@
 运行方式: python batch_publish.py <目录路径>
 """
 
+import os
 import sys
 import json
 import time
@@ -23,8 +24,8 @@ from src.workflow_executor import WorkflowExecutor
 from src.project_detector import ProjectDetector
 
 
-# 默认 API Key - 用于批量发布时自动配置环境变量
-DEFAULT_API_KEY = "c73d0eb842msh082900adbe7d22cp15a3e0jsn8156d94adb0d"
+# 默认 API Key - 用于批量发布时自动配置环境变量，从环境变量 API_KEY 读取（不要写进代码）
+DEFAULT_API_KEY = os.environ.get("API_KEY", "")
 
 
 class BatchPublisher:
@@ -172,7 +173,7 @@ class BatchPublisher:
                     'required': True
                 }
             ]
-            print(f"   📋 自动配置 API_KEY: {DEFAULT_API_KEY[:20]}...")
+            print(f"   📋 自动配置 API_KEY: {'已设置' if DEFAULT_API_KEY else '未设置（环境变量 API_KEY 为空）'}")
             executor.step_ai_generate()
             result['steps_completed'].append('ai_generate')
             

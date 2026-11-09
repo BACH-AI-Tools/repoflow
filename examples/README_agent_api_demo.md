@@ -23,7 +23,7 @@ pip install requests
 编辑 `agent_platform_api_demo.py` 文件，修改以下参数：
 
 ```python
-PHONE = "17610785055"  # 你的手机号
+PHONE = "YOUR_PHONE_NUMBER"  # 你的手机号
 MCP_NAME = "测试MCP"    # 要测试的 MCP 名称
 ```
 
@@ -99,7 +99,7 @@ python examples/agent_platform_api_demo.py
 ======================================================================
 
 📋 配置信息:
-   📱 手机号: 17610785055
+   📱 手机号: YOUR_PHONE_NUMBER
    🔑 验证码: 12202501
    📦 MCP 名称: 测试MCP
    🤖 Agent 名称: 测试MCP 测试 Agent
@@ -117,7 +117,7 @@ python examples/agent_platform_api_demo.py
 {
   "prefix": "+86",
   "guest": true,
-  "phone": "17610785055",
+  "phone": "YOUR_PHONE_NUMBER",
   "validation_code": "12202501"
 }
 
@@ -167,7 +167,7 @@ from datetime import datetime
 demo = AgentPlatformDemo()
 
 # 登录
-phone = "17610785055"
+phone = "YOUR_PHONE_NUMBER"
 validation_code = datetime.now().strftime("%m%Y%d")
 user_info = demo.login(phone, validation_code)
 

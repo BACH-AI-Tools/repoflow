@@ -21,7 +21,7 @@ mcp_message = {
 # 2. 发送POST请求到SSE端点
 POST http://mcptest013.sitmcp.kaleido.guru/sse
 Headers:
-  - emcp-key: PI1EQcsELJ7uPJnL3VNS89UaNIgRkL8n
+  - emcp-key: YOUR_EMCP_KEY
   - emcp-usercode: VGSdDTgj
   - Accept: text/event-stream
   - Cache-Control: no-cache
@@ -219,7 +219,7 @@ result['data']['url']
 ```json
 {
   "sse_url": "http://mcptest013.sitmcp.kaleido.guru/sse",
-  "emcp_key": "PI1EQcsELJ7uPJnL3VNS89UaNIgRkL8n",
+  "emcp_key": "YOUR_EMCP_KEY",
   "emcp_usercode": "VGSdDTgj",
   "tool_name": "jimeng-v40-generate"  ✅
 }

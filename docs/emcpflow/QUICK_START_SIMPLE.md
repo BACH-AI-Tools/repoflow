@@ -111,7 +111,7 @@ Linux/Mac: ~/.emcpflow/config.json
 ```json
 {
   "emcp_credentials": {
-    "phone_number": "17610785055",
+    "phone_number": "YOUR_PHONE_NUMBER",
     "validation_code": "11202505"
   },
   "azure_openai": {

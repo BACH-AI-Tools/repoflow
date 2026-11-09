@@ -24,7 +24,7 @@
     ↓
 POST http://mcptest013.sitmcp.kaleido.guru/mcp/tools/call
 Headers:
-  - emcp-key: PI1EQcsELJ7uPJnL3VNS89UaNIgRkL8n
+  - emcp-key: YOUR_EMCP_KEY
   - emcp-usercode: VGSdDTgj
 Body:
 {
@@ -110,7 +110,7 @@ class JimengMCPClient:
     def __init__(self):
         self.sse_url = "http://mcptest013.sitmcp.kaleido.guru/sse"
         self.headers = {
-            "emcp-key": "PI1EQcsELJ7uPJnL3VNS89UaNIgRkL8n",
+            "emcp-key": "YOUR_EMCP_KEY",
             "emcp-usercode": "VGSdDTgj"
         }
     
@@ -213,7 +213,7 @@ logo_url = logo_generator.get_or_generate_logo(
 {
   "jimeng_mcp": {
     "sse_url": "http://mcptest013.sitmcp.kaleido.guru/sse",
-    "emcp_key": "PI1EQcsELJ7uPJnL3VNS89UaNIgRkL8n",
+    "emcp_key": "YOUR_EMCP_KEY",
     "emcp_usercode": "VGSdDTgj"
   }
 }
@@ -293,7 +293,7 @@ logo_generator = LogoGenerator(jimeng_mcp_client=jimeng_client)
 POST http://mcptest013.sitmcp.kaleido.guru/mcp/tools/call
 
 Headers:
-  emcp-key: PI1EQcsELJ7uPJnL3VNS89UaNIgRkL8n
+  emcp-key: YOUR_EMCP_KEY
   emcp-usercode: VGSdDTgj
   Content-Type: application/json
 
@@ -406,7 +406,7 @@ Response:
 ```python
 JimengMCPClient(
     sse_url="http://mcptest013.sitmcp.kaleido.guru/sse",
-    emcp_key="PI1EQcsELJ7uPJnL3VNS89UaNIgRkL8n",
+    emcp_key="YOUR_EMCP_KEY",
     emcp_usercode="VGSdDTgj"
 )
 ```

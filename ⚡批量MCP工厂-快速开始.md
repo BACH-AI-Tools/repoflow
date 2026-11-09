@@ -282,7 +282,7 @@ python batch_mcp_factory.py "E:\mcp-projects" --projects "3"
 
 ### Q: API_KEY 是什么？
 
-**A:** 已经预设为：`c73d0eb842msh082900adbe7d22cp15a3e0jsn8156d94adb0d`
+**A:** 已经预设为：`YOUR_RAPIDAPI_KEY`
 
 ---
 

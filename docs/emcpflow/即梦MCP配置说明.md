@@ -59,7 +59,7 @@ python tests/test_jimeng_mcp_v2.py
 文档中出现的以下值**仅为示例**，不能直接使用：
 
 ```json
-"emcp-key": "PI1EQcsELJ7uPJnL3VNS89UaNIgRkL8n",  // ❌ 示例值，请替换
+"emcp-key": "YOUR_EMCP_KEY",  // ❌ 示例值，请替换
 "emcp-usercode": "VGSdDTgj"  // ❌ 示例值，请替换
 ```
 

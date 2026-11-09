@@ -130,7 +130,7 @@ def login(..., max_retries: int = 3):
 **改动：**
 ```python
 # 获取备用 token（如果有）
-fallback_token = emcp_config.get('fallback_token', 'd303fc3a-ff8c-422f-afb8-6fc02d685ee2')
+fallback_token = emcp_config.get('fallback_token', 'YOUR_FALLBACK_TOKEN')
 
 user_info = emcp_mgr.login(phone, code, fallback_token=fallback_token)
 ```
@@ -138,7 +138,7 @@ user_info = emcp_mgr.login(phone, code, fallback_token=fallback_token)
 **配置：**
 ```json
 "emcp": {
-  "fallback_token": "d303fc3a-ff8c-422f-afb8-6fc02d685ee2"
+  "fallback_token": "YOUR_FALLBACK_TOKEN"
 }
 ```
 

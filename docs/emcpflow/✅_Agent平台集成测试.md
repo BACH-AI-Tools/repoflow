@@ -37,7 +37,7 @@ Body:
 {
   "prefix": "+86",
   "guest": true,
-  "phone": "17610785055",
+  "phone": "YOUR_PHONE_NUMBER",
   "validation_code": "11202507"  // 格式: MMyyyydd
 }
 
@@ -170,7 +170,7 @@ PUT https://sit-emcp.kaleido.guru/api/Template/publish_mcp_template/{template_id
 
 📋 步骤 1/7: 登录 Agent 平台...
    📤 POST https://v5.kaleido.guru/api/authentication/...
-   📱 手机号: 17610785055
+   📱 手机号: YOUR_PHONE_NUMBER
    🔑 验证码: 11202507
    📥 响应: 200
    ✅ 登录成功

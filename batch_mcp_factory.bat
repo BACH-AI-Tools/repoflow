@@ -15,8 +15,10 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM 设置环境变量
-set "API_KEY=c73d0eb842msh082900adbe7d22cp15a3e0jsn8156d94adb0d"
+REM API_KEY 从环境变量读取，不要写进脚本
+if "%API_KEY%"=="" (
+    set /p "API_KEY=请输入 API_KEY（RapidAPI Key）: "
+)
 
 REM 如果没有参数，进入交互模式
 if "%~1"=="" (

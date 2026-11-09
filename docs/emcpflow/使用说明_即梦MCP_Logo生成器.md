@@ -146,7 +146,7 @@ https://p9-aiop-sign.byteimg.com/tos-cn-i-vuqhorh59i/xxx.image?...
 jimeng_config = {
     "base_url": "http://mcptest013.sitmcp.kaleido.guru/sse",
     "headers": {
-        "emcp-key": "PI1EQcsELJ7uPJnL3VNS89UaNIgRkL8n",
+        "emcp-key": "YOUR_EMCP_KEY",
         "emcp-usercode": "VGSdDTgj"
     }
 }
