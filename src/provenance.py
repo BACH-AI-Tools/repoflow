@@ -94,32 +94,48 @@ def _declared_license(repo_path: Path) -> Optional[str]:
     return None
 
 
-def detect_authors(repo_path: Path) -> List[str]:
-    """上游声明的作者；一个都读不到时返回空列表（不要用我们自己的名字顶上）"""
-    repo_path = Path(repo_path)
-    authors: List[str] = []
+def _pyproject_authors(repo_path: Path) -> List[str]:
     pt = repo_path / "pyproject.toml"
-    if pt.exists():
-        text = pt.read_text(encoding="utf-8", errors="replace")
-        block = re.search(r"^\s*authors\s*=\s*\[(.*?)\]", text, re.S | re.M)
-        if block:
-            authors += re.findall(r'name\s*=\s*"([^"]+)"', block.group(1))
+    if not pt.exists():
+        return []
+    block = re.search(r"^\s*authors\s*=\s*\[(.*?)\]", pt.read_text(encoding="utf-8", errors="replace"), re.S | re.M)
+    return re.findall(r'name\s*=\s*"([^"]+)"', block.group(1)) if block else []
+
+
+def _setup_py_authors(repo_path: Path) -> List[str]:
     sp = repo_path / "setup.py"
-    if sp.exists() and not authors:
-        m = re.search(r'author\s*=\s*["\']([^"\']+)["\']', sp.read_text(encoding="utf-8", errors="replace"))
-        if m:
-            authors.append(m.group(1))
+    if not sp.exists():
+        return []
+    m = re.search(r'author\s*=\s*["\']([^"\']+)["\']', sp.read_text(encoding="utf-8", errors="replace"))
+    return [m.group(1)] if m else []
+
+
+def _package_json_authors(repo_path: Path) -> List[str]:
     pj = repo_path / "package.json"
-    if pj.exists() and not authors:
-        try:
-            a = json.loads(pj.read_text(encoding="utf-8")).get("author")
-            if isinstance(a, dict):
-                a = a.get("name")
-            if isinstance(a, str) and a.strip():
-                authors.append(re.sub(r"\s*[<(].*$", "", a).strip())
-        except (ValueError, OSError):
-            pass
-    return [a for a in dict.fromkeys(authors) if a and a != PLACEHOLDER_AUTHOR]
+    if not pj.exists():
+        return []
+    try:
+        a = json.loads(pj.read_text(encoding="utf-8")).get("author")
+    except (ValueError, OSError):
+        return []
+    if isinstance(a, dict):
+        a = a.get("name")
+    if not isinstance(a, str):
+        return []
+    # "Name <mail> (url)" -> "Name"（不用正则，避免回溯）
+    name = a.split("<", 1)[0].split("(", 1)[0].strip()
+    return [name] if name else []
+
+
+def detect_authors(repo_path: Path) -> List[str]:
+    """上游声明的作者，按 pyproject.toml → setup.py → package.json 取第一个有的；
+    一个都读不到时返回空列表（不要用我们自己的名字顶上）"""
+    repo_path = Path(repo_path)
+    for source in (_pyproject_authors, _setup_py_authors, _package_json_authors):
+        authors = [a for a in dict.fromkeys(source(repo_path)) if a and a != PLACEHOLDER_AUTHOR]
+        if authors:
+            return authors
+    return []
 
 
 def _git_head(repo_path: Path) -> Optional[str]:

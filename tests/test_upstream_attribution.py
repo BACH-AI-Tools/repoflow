@@ -183,3 +183,22 @@ def test_repo_description_and_catalog_author():
     assert provenance.author_line(prov) == "Alice Example"
     assert provenance.author_line(None) == "BACH Studio"
     assert provenance.repo_description("ours", None) == "ours - 由 MCP工厂自动创建"
+
+
+def test_package_json_author_string_and_object(tmp_path):
+    import json
+    repo = tmp_path / "node-mcp"
+    repo.mkdir()
+    (repo / "package.json").write_text(json.dumps({"name": "x", "author": "Bob Builder <bob@example.com> (https://bob.dev)"}), encoding="utf-8")
+    assert provenance.detect_authors(repo) == ["Bob Builder"]
+    (repo / "package.json").write_text(json.dumps({"name": "x", "author": {"name": "Carol", "email": "c@example.com"}}), encoding="utf-8")
+    assert provenance.detect_authors(repo) == ["Carol"]
+    (repo / "package.json").write_text("{not json", encoding="utf-8")
+    assert provenance.detect_authors(repo) == []
+
+
+def test_unrecognised_license_text_asks_for_manual_check(tmp_path):
+    repo = make_upstream(tmp_path, license_text="Custom license: do whatever, but tell me.\n")
+    prov = provenance.detect(repo, UPSTREAM)
+    assert prov["license"] is None
+    assert any("人工确认" in w for w in prov["warnings"])
