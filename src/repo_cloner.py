@@ -339,7 +339,8 @@ class RepoCloner:
         self,
         github_url: str,
         output_dir: Optional[Path] = None,
-        prefix: Optional[str] = None
+        prefix: Optional[str] = None,
+        allow_unlicensed: bool = False
     ) -> Dict:
         """
         一站式克隆和修改
@@ -361,7 +362,15 @@ class RepoCloner:
             
             if project_type == 'unknown':
                 raise Exception("不支持的项目类型")
-            
+
+            # 2.5 上游来源与许可证（必须在改包名之前读，改完就读不到原作者了）
+            from src import provenance
+            prov = provenance.require_license(provenance.detect(repo_path, github_url), allow_unlicensed)
+            print(f"📜 上游许可证: {prov['license'] or '未识别'}（{', '.join(prov['license_files']) or '无许可证文件'}）")
+            print(f"👤 原作者: {', '.join(prov['authors']) or '未知'}")
+            for w in prov['warnings']:
+                print(f"⚠️  {w}")
+
             # 3. 获取原始包名
             original_name = self.get_original_package_name(repo_path)
             
@@ -384,7 +393,8 @@ class RepoCloner:
                 'repo_path': repo_path,
                 'project_type': project_type,
                 'original_package_name': old_name,
-                'new_package_name': new_name
+                'new_package_name': new_name,
+                'provenance': prov
             }
             
         except Exception as e:

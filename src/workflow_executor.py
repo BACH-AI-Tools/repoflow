@@ -3,6 +3,7 @@
 工作流执行器 - 真实执行所有步骤
 """
 
+from src import provenance
 from pathlib import Path
 from typing import Dict, Any, Optional
 import sys
@@ -218,7 +219,7 @@ class WorkflowExecutor:
         repo_url, is_new = github_mgr.create_repository(
             org_name=self.org_name,
             repo_name=self.repo_name,
-            description=f"{self.repo_name} - 由 MCP工厂自动创建",
+            description=provenance.repo_description(self.repo_name, getattr(self, 'provenance', None)),
             private=False
         )
         
@@ -257,7 +258,8 @@ class WorkflowExecutor:
         
         # 创建生成器（传入组织名称用于 SonarQube project key）
         generator = PipelineGenerator(org_name=org_name)
-        
+        generator.provenance = getattr(self, 'provenance', None)  # 重新发布别人的项目：元数据用上游作者和许可证
+
         # 根据类型生成（同时会生成 SonarQube workflow）
         if project_type == "python":
             print(f"📝 生成 PyPI 发布工作流...")
@@ -999,7 +1001,7 @@ Output only the introduction text, no explanations."""
                     "summary": project_info.get('description', f"{self.package_name} MCP Server"),
                     "description": readme_content,
                     "readme": readme_content,
-                    "author": "BACH Studio"
+                    "author": provenance.author_line(getattr(self, 'provenance', None))
                 }
             }
             
@@ -1870,7 +1872,8 @@ Output only the introduction text, no explanations."""
         self,
         github_url: str,
         prefix: str = "bachai",
-        output_dir: Optional[Path] = None
+        output_dir: Optional[Path] = None,
+        allow_unlicensed: bool = False
     ) -> Dict:
         """
         完整的克隆和发布工作流程
@@ -1909,7 +1912,7 @@ Output only the introduction text, no explanations."""
             # ===== 步骤 1: 克隆并修改包名 =====
             self.update_progress(5)
             cloner = RepoCloner(prefix=prefix)
-            clone_result = cloner.clone_and_modify(github_url, output_dir, prefix)
+            clone_result = cloner.clone_and_modify(github_url, output_dir, prefix, allow_unlicensed=allow_unlicensed)
             
             if not clone_result['success']:
                 raise Exception(f"克隆失败: {clone_result.get('error', '未知错误')}")
@@ -1925,7 +1928,12 @@ Output only the introduction text, no explanations."""
             self.package_name = new_package_name
             self.package_type = project_type
             self.repo_name = new_package_name  # 使用新包名作为仓库名
-            
+            # 上游来源：仓库描述、生成的元数据、目录条目都用它；UPSTREAM.md 随代码一起推送
+            self.provenance = clone_result.get('provenance')
+            if self.provenance:
+                provenance.write_upstream_file(repo_path, self.provenance)
+                result['provenance'] = self.provenance
+
             # 从项目中检测版本
             from src.project_detector import ProjectDetector
             detector = ProjectDetector(repo_path)

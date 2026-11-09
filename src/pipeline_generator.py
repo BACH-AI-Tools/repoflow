@@ -14,6 +14,8 @@ class PipelineGenerator:
         Args:
             org_name: GitHub 组织名称，用于生成 SonarQube project key
         """
+        # 克隆并发布别人的项目时由 WorkflowExecutor 填上（src/provenance.py）；我们自己的项目保持 None
+        self.provenance = None
         self.org_name = org_name
     
     def generate(self, pipeline_type: str, project_path: Path):
@@ -38,6 +40,41 @@ class PipelineGenerator:
         # 同时生成 SonarQube workflow
         self._generate_sonar_pipeline(project_path)
     
+    # ---- 元数据里的作者 / 许可证：重新发布别人的项目时用上游的，不冒名 ----
+    _CLASSIFIERS = {
+        "MIT": "MIT License", "Apache-2.0": "Apache Software License", "BSD-3-Clause": "BSD License",
+        "BSD-2-Clause": "BSD License", "ISC": "ISC License (ISCL)", "MPL-2.0": "Mozilla Public License 2.0 (MPL 2.0)",
+        "GPL-3.0": "GNU General Public License v3 (GPLv3)", "GPL-2.0": "GNU General Public License v2 (GPLv2)",
+        "LGPL-3.0": "GNU Lesser General Public License v3 (LGPLv3)", "AGPL-3.0": "GNU Affero General Public License v3",
+    }
+
+    def _author(self) -> str:
+        from src.provenance import author_line
+        return author_line(self.provenance).replace('"', "'")
+
+    def _author_email_line(self) -> str:
+        return '' if self.provenance else '\n    author_email="contact@bachstudio.com",'
+
+    def _author_email_toml(self) -> str:
+        return '' if self.provenance else ', email = "contact@bachstudio.com"'
+
+    def _license_spdx(self):
+        if not self.provenance:
+            return "MIT"
+        return self.provenance.get("license")
+
+    def _license_classifier(self) -> str:
+        c = self._CLASSIFIERS.get(self._license_spdx() or "")
+        return f'\n        "License :: OSI Approved :: {c}",' if c else ''
+
+    def _homepage(self, project_path: Path) -> str:
+        return f"https://github.com/{self.org_name}/{project_path.name}"
+
+    def _upstream_url_toml(self) -> str:
+        if not self.provenance:
+            return ''
+        return f'\nUpstream = "{self.provenance.get("upstream_url")}"'
+
     def _generate_sonar_pipeline(self, project_path: Path):
         """生成 SonarQube 扫描 Pipeline (GitHub Actions)"""
         workflow_dir = project_path / '.github' / 'workflows'
@@ -344,7 +381,6 @@ jobs:
         # 检查并更新 package.json
         if package_json.exists():
             # 读取现有的 package.json
-            import json
             try:
                 with open(package_json, 'r', encoding='utf-8') as f:
                     package_data = json.load(f)
@@ -368,8 +404,8 @@ jobs:
                     "build": "echo \"No build step\""
                 },
                 "keywords": [],
-                "author": "BACH Studio",
-                "license": "MIT"
+                "author": self._author(),
+                "license": self._license_spdx() or "SEE LICENSE IN UPSTREAM.md"
             }
             package_json.write_text(json.dumps(package_data, indent=2, ensure_ascii=False), encoding='utf-8')
             print(f"📝 创建 package.json: {package_name}")
@@ -448,16 +484,14 @@ with open("README.md", "r", encoding="utf-8") as fh:
 setup(
     name="{package_name}",
     version="1.0.0",
-    author="BACH Studio",
-    author_email="contact@bachstudio.com",
+    author="{self._author()}",{self._author_email_line()}
     description="A short description",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/BACH-AI-Tools/{project_path.name}",
+    url="{self._homepage(project_path)}",
     packages=find_packages(),
     classifiers=[
-        "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
+        "Programming Language :: Python :: 3",{self._license_classifier()}
         "Operating System :: OS Independent",
     ],
     python_requires=">=3.7",
@@ -483,19 +517,18 @@ version = "1.0.0"
 description = "A short description"
 readme = "README.md"
 requires-python = ">=3.7"
-license = {{text = "MIT"}}
+license = {{text = "{self._license_spdx() or 'SEE UPSTREAM.md'}"}}
 authors = [
-    {{name = "BACH Studio", email = "contact@bachstudio.com"}}
+    {{name = "{self._author()}"{self._author_email_toml()}}}
 ]
 keywords = []
 classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",{self._license_classifier()}
     "Operating System :: OS Independent",
 ]
 
 [project.urls]
-Homepage = "https://github.com/BACH-AI-Tools/{project_path.name}"
+Homepage = "{self._homepage(project_path)}"{self._upstream_url_toml()}
 '''
             pyproject_toml.write_text(toml_content, encoding='utf-8')
 
