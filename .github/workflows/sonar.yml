@@ -1,0 +1,66 @@
+name: SonarQube Analysis
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# 同一个分支 / PR 又推了新提交：取消还没跑完的旧扫描，不让过时的扫描占着 Sonar 服务器
+concurrency:
+  group: sonar-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  sonarqube:
+    name: SonarQube Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 缓存扫描引擎和插件：公司 Sonar 服务器出口慢，每次重新下载要 10 分钟以上；缓存后只有第一次需要下载
+      - name: Cache SonarQube packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/sonar-home/cache
+          key: sonar-cache-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: sonar-cache-${{ runner.os }}-
+
+      # 扫描并等待质量门禁：门禁不通过，这一步失败，PR 不能合并
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_USER_HOME: ${{ runner.temp }}/sonar-home
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectKey=BACH-AI-Tools_repoflow
+            -Dsonar.projectName=RepoFlow（MCP工厂）
+            -Dsonar.projectVersion=${{ github.sha }}
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
+            -Dsonar.scanner.skipJreProvisioning=true
+
+      # 门禁没过时，把没达标的指标直接列在这里（PR 的检查页上就能看到），不用登录 Sonar
+      - name: Show failed quality gate conditions
+        if: failure()
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          q="projectKey=BACH-AI-Tools_repoflow"
+          task=$(sed -n 's/^ceTaskId=//p' .scannerwork/report-task.txt 2>/dev/null)
+          if [ -n "$task" ]; then
+            aid=$(curl -s -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/ce/task?id=$task" | jq -r '.task.analysisId // empty')
+            [ -n "$aid" ] && q="analysisId=$aid"
+          fi
+          curl -s -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/qualitygates/project_status?$q" | jq -r '
+            .projectStatus as $s
+            | "新代码起点: \($s.period.mode // "-") \($s.period.parameter // "") \($s.period.date // "")",
+              ($s.conditions[] | select(.status == "ERROR")
+               | "::error title=质量门禁没过::\(.metricKey) = \(.actualValue)（要求 \(if .comparator == "GT" then "≤" else "≥" end) \(.errorThreshold)）")'
