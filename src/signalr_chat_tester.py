@@ -477,16 +477,19 @@ class SignalRChatTester:
                 self.log(f"   ⚠️ 收到 401 - EMCP Token 已过期")
                 self.log(f"   🔄 重新登录 EMCP...")
                 
-                from config_manager import ConfigManager
-                config_mgr = ConfigManager()
-                creds = config_mgr.load_emcp_credentials()
+                # GUI 设置页把 EMCP 手机号保存在统一配置（~/.repoflow/config.json），
+                # get_emcp_config() 会生成当日验证码
+                from src.unified_config_manager import UnifiedConfigManager
+                creds = UnifiedConfigManager().get_emcp_config()
                 
-                if creds and emcp_manager.login(creds['phone_number'], creds['validation_code']):
+                phone = creds.get('phone_number')
+                if phone and emcp_manager.login(phone, creds['validation_code']):
                     self.log(f"   ✅ 重新登录成功")
                     headers['token'] = emcp_manager.session_key
                     server_id_resp = requests.get(server_id_url, headers=headers, timeout=30)
                     self.log(f"   📥 响应: {server_id_resp.status_code}")
                 else:
+                    self.log("   ❌ 重新登录失败：请在 ⚙️ 设置中填写 EMCP 手机号")
                     return None
             
             server_id_data = server_id_resp.json()

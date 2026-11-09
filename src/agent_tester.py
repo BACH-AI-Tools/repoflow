@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 from datetime import datetime
 
 try:
-    from signalr_chat_tester import SignalRChatTester
+    from src.signalr_chat_tester import SignalRChatTester
     SIGNALR_AVAILABLE = True
 except ImportError:
     SIGNALR_AVAILABLE = False
