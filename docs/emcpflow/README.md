@@ -70,7 +70,7 @@ python emcpflow_simple_gui.py
 点击 `[设置]` 按钮，填写：
 
 - **手机号**: 您的 EMCP 账号手机号
-- **验证码**: 固定验证码（如 `11202505`）
+- **验证码**: 按当天日期自动生成（格式「月月年年年年日日」），每天变化，不是固定值
 
 配置后，工具会自动登录，无需每次手动输入。
 
@@ -78,7 +78,7 @@ python emcpflow_simple_gui.py
 
 点击 `[设置]` 按钮，填写：
 
-- **Endpoint**: 如 `https://jinderu.openai.azure.com`
+- **Endpoint**: 如 `https://your-resource.openai.azure.com`
 - **API Key**: 您的 Azure OpenAI API Key
 - **Deployment**: 部署名称（如 `gpt-4o`）
 
@@ -225,8 +225,8 @@ EMCPFlow/
 
 ## 🔗 EMCP 平台
 
-- **测试环境**: https://sit-emcp.kaleido.guru
-- **正式环境**: https://emcp.kaleido.guru
+- **测试环境**: `https://your-emcp-test-host.example.com`
+- **正式环境**: `https://your-emcp-host.example.com`
 
 ---
 
@@ -303,15 +303,11 @@ A: 检查日志输出，常见原因：
 - `logo_generator.py` - Logo 生成器源码
 
 ### 文档
-- [QUICK_START_SIMPLE.md](QUICK_START_SIMPLE.md) - 快速开始指南
 - [使用说明.md](使用说明.md) - 详细使用说明
 - [LOGO_说明.md](LOGO_说明.md) - Logo 功能说明
 - [CHANGELOG.md](CHANGELOG.md) - 更新日志
-- [CONFIG_EXAMPLE.json](CONFIG_EXAMPLE.json) - 配置示例
 
 ---
 
 **Made with ❤️ by BACH Studio**
-
-
 
